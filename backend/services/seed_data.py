@@ -908,29 +908,32 @@ def get_sector_performance():
 
 
 def get_universe_overview():
-    """Return overview data for all stocks."""
+    """Return overview data for all stocks (daily-varying prices via _daily_rng)."""
     result = []
     for entry in ALL_STOCKS:
+        q = get_seed_quote(entry[0])
         s = _stock_dict(entry[0])
-        base = s["basePrice"]
-        change = round(_rng(entry[0]).uniform(-base * 0.03, base * 0.03), 2)
-        change_pct = round(change / base * 100, 2)
         result.append({
-            "ticker": s["ticker"], "name": s["name"], "sector": s["sector"],
-            "price": base, "change": change, "change_pct": change_pct,
-            "volume": s.get("avgVolume", round(_rng(entry[0]).uniform(100000, 5000000), 0)), "market_cap": s["marketCap"],
+            "ticker": q["ticker"], "name": q["name"], "sector": q["sector"],
+            "price": q["price"], "change": q["change"], "change_pct": q.get("changePercent", 0),
+            "volume": q["volume"], "market_cap": q["marketCap"],
         })
     return result
 
 
 def get_market_indices():
-    """Return market index data (NIFTY 50, SENSEX, BANK NIFTY)."""
-    r = _rng("indices")
+    """Return market index data (NIFTY 50, SENSEX, BANK NIFTY) — daily-varying via _daily_rng."""
+    r = _daily_rng("indices")
     indices = [
         {"name": "NIFTY 50", "last": round(r.uniform(22000, 26000), 2)},
         {"name": "SENSEX", "last": round(r.uniform(72000, 86000), 2)},
         {"name": "BANK NIFTY", "last": round(r.uniform(46000, 56000), 2)},
+        {"name": "INDIA VIX", "last": round(r.uniform(10, 28), 2)},
     ]
+    # VIX has special change semantics (points, not %)
+    if indices[-1]["name"] == "INDIA VIX":
+        indices[-1]["change"] = round(r.uniform(-3, 3), 2)
+        indices[-1]["change_pct"] = round(indices[-1]["change"], 2)
     for idx in indices:
         chg = round(r.uniform(-idx["last"] * 0.01, idx["last"] * 0.01), 2)
         idx["change"] = chg

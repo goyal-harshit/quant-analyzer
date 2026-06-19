@@ -112,6 +112,18 @@ export function useAddPosition() {
   })
 }
 
+export function useRemovePosition() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ portfolioId, positionId }: { portfolioId: number; positionId: number }) =>
+      portfolioApi.removePosition(portfolioId, positionId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['portfolio', variables.portfolioId] })
+      queryClient.invalidateQueries({ queryKey: ['portfolios'] })
+    },
+  })
+}
+
 export function useDeletePortfolio() {
   const queryClient = useQueryClient()
   return useMutation({

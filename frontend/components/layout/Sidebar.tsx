@@ -3,13 +3,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Filter, Target, RefreshCw, Globe, MessageSquare, Zap, Cpu, LogOut, User, Menu } from 'lucide-react'
+import { Home, Filter, Target, RefreshCw, Globe, MessageSquare, Zap, Cpu, LogOut, User, Menu, Star } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 
 const NAV = [
-  { id: 'dashboard', icon: Home, label: 'Dashboard', href: '/' },
+  { id: 'dashboard', icon: Home, label: 'Dashboard', href: '/dashboard' },
   { id: 'screener', icon: Filter, label: 'Screener', href: '/screener' },
   { id: 'portfolio', icon: Target, label: 'Portfolio', href: '/portfolio' },
+  { id: 'watchlists', icon: Star, label: 'Watchlists', href: '/watchlists' },
   { id: 'backtest', icon: RefreshCw, label: 'Backtester', href: '/backtest' },
   { id: 'macro', icon: Globe, label: 'Macro', href: '/macro' },
   { id: 'ai', icon: MessageSquare, label: 'QuantAI', href: '/ai' },
@@ -24,11 +25,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
 
-  const isAuthPage = pathname === '/login' || pathname === '/register'
-  if (isAuthPage) return null
+  if (pathname === '/' || pathname === '/login' || pathname === '/register') return null
 
   const active = (href: string) => {
-    if (href === '/') return pathname === '/'
     return pathname.startsWith(href)
   }
 

@@ -15,7 +15,7 @@ export default function LayoutShell({ children }: LayoutShellProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const pathname = usePathname()
-  const isAuthPage = pathname === '/login' || pathname === '/register'
+  const isStandalonePage = pathname === '/login' || pathname === '/register' || pathname === '/'
 
   // Global Ctrl+K handler
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function LayoutShell({ children }: LayoutShellProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  if (isAuthPage) {
+  if (isStandalonePage) {
     return <div className="min-h-screen bg-bg">{children}</div>
   }
 
