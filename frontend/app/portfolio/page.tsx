@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { TrendingUp, Activity, Shield, Database, Plus, Trash2 } from 'lucide-react'
+import { TrendingUp, Activity, Shield, Database, Plus, Trash2, RefreshCw } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { T, fI, pct, genPrices, STOCKS } from '@/lib/stockData'
-import { usePortfolios, usePortfolio, useAddPosition, useCreatePortfolio, useRemovePosition } from '@/lib/hooks'
+import { T, fI, pct } from '@/lib/stockData'
+import { usePortfolios, usePortfolio, useAddPosition, useCreatePortfolio, useRemovePosition, usePortfolioPerformance } from '@/lib/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 
@@ -40,7 +40,7 @@ function CT({ active, payload, label }: { active?: any; payload?: any; label?: a
       <div style={{ color: T.muted, marginBottom: 4 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color || T.text, fontFamily: T.mono }}>
-          {typeof p.value === 'number' ? p.value.toFixed(2) : p.value}
+          {p.name}: {typeof p.value === 'number' ? p.value.toFixed(1) : p.value}%
         </div>
       ))}
     </div>
@@ -51,7 +51,8 @@ export default function Portfolio() {
   const qc = useQueryClient()
   const { data: portfolios, isLoading: ploading } = usePortfolios()
   const [selId, setSelId] = useState<number | null>(null)
-  const { data: portfolio, isLoading: p2loading } = usePortfolio(selId)
+  const [refreshSeed, setRefreshSeed] = useState(0)
+  const { data: portfolio, isLoading: p2loading } = usePortfolio(selId || 0, refreshSeed)
   const createPortfolio = useCreatePortfolio()
   const addPosition = useAddPosition()
   const removePosition = useRemovePosition()
@@ -147,16 +148,14 @@ export default function Portfolio() {
     )
   }
 
-  const positions = (portfolio.positions || []).map(p => {
-    const stk = STOCKS.find(s => s.ticker === p.ticker)
-    return { ...p, stk }
-  })
+  const { data: perfData } = usePortfolioPerformance(selId || 0, 'NIFTY50', '1y', refreshSeed)
+  const positions = portfolio.positions || []
   const totVal = portfolio.total_value || 0
   const totCst = portfolio.total_cost || 0
   const totPnl = portfolio.total_pnl || 0
   const COLS = [T.blue, T.green, T.amber, '#a78bfa', T.red]
   const pie = positions.map((p, i) => ({ name: p.ticker, v: p.current_value || 0, c: COLS[i % COLS.length] }))
-  const portPts = genPrices(totVal || 1000000, 777, 120).map(x => ({ ...x, v: x.p }))
+  const portPts = perfData?.performance?.map((x: any) => ({ d: x.date, v: x.portfolio, b: x.benchmark })) || []
 
   return (
     <div style={{ padding: '26px 30px', maxWidth: 1200, fontFamily: T.sans }}>
@@ -165,16 +164,28 @@ export default function Portfolio() {
           <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Portfolio Analytics</div>
           <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>{portfolio.name} · India Equity Portfolio</div>
         </div>
-        <button
-          onClick={() => setShowAdd(true)}
-          style={{
-            background: T.blue, color: '#fff', border: 'none', cursor: 'pointer',
-            padding: '9px 18px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-            fontFamily: T.sans, display: 'flex', alignItems: 'center', gap: 6,
-          }}
-        >
-          <Plus size={14} /> Add Position
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => setRefreshSeed(prev => prev + 1)}
+            style={{
+              background: T.el, border: `1px solid ${T.b}`, color: T.sub, cursor: 'pointer',
+              padding: '9px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              fontFamily: T.sans, display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <RefreshCw size={14} className={p2loading ? 'animate-spin' : ''} /> Refresh
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            style={{
+              background: T.blue, color: '#fff', border: 'none', cursor: 'pointer',
+              padding: '9px 18px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              fontFamily: T.sans, display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <Plus size={14} /> Add Position
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
@@ -192,23 +203,24 @@ export default function Portfolio() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 14 }}>
         <div style={card({ padding: '16px 18px' })}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 14 }}>Portfolio Value (6M)</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 14 }}>Performance vs Benchmark (1Y)</div>
           <ResponsiveContainer width="100%" height={185}>
-            <AreaChart data={portPts} margin={{ top: 4, right: 4, bottom: 0, left: 60 }}>
+            <AreaChart data={portPts} margin={{ top: 4, right: 4, bottom: 0, left: 20 }}>
               <defs>
                 <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={T.green} stopOpacity={0.3} />
                   <stop offset="95%" stopColor={T.green} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="d" tick={{ fontSize: 10, fill: T.muted }} tickLine={false} axisLine={false} interval={15} />
+              <XAxis dataKey="d" tick={{ fontSize: 10, fill: T.muted }} tickLine={false} axisLine={false} interval={portPts.length ? Math.max(1, Math.floor(portPts.length / 8)) : 15} />
               <YAxis
                 tick={{ fontSize: 10, fill: T.muted, fontFamily: T.mono }}
                 tickLine={false} axisLine={false} domain={['auto', 'auto']}
-                tickFormatter={v => '₹' + (v / 100000).toFixed(0) + 'L'}
+                tickFormatter={v => v.toFixed(0) + '%'}
               />
               <Tooltip content={<CT />} />
-              <Area type="monotone" dataKey="v" stroke={T.green} strokeWidth={2} fill="url(#pg)" dot={false} />
+              <Area type="monotone" dataKey="v" stroke={T.green} strokeWidth={2} fill="url(#pg)" dot={false} name="Portfolio" />
+              <Area type="monotone" dataKey="b" stroke={T.muted} strokeWidth={1.5} fill="none" dot={false} name="Benchmark (Nifty 50)" strokeDasharray="4 4" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -229,7 +241,7 @@ export default function Portfolio() {
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 5 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.c, flexShrink: 0 }} />
                   <span style={{ fontSize: 11, fontFamily: T.mono, color: T.sub }}>{d.name}</span>
-                  <span style={{ fontSize: 11, color: T.muted, marginLeft: 'auto' }}>{(d.v / totVal * 100).toFixed(1)}%</span>
+                  <span style={{ fontSize: 11, color: T.muted, marginLeft: 'auto' }}>{totVal > 0 ? (d.v / totVal * 100).toFixed(1) : '0.0'}%</span>
                 </div>
               ))}
             </>
@@ -265,13 +277,13 @@ export default function Portfolio() {
               {positions.map((p, i) => (
                 <tr key={p.id} style={{ borderBottom: `1px solid ${T.b}`, background: i % 2 === 0 ? 'transparent' : `${T.el}55` }}>
                   <td style={{ padding: '11px 15px', fontFamily: T.mono, fontWeight: 700, fontSize: 12, color: T.text }}>{p.ticker}</td>
-                  <td style={{ padding: '11px 15px' }}><Tag>{p.sector || p.stk?.sector || 'N/A'}</Tag></td>
+                  <td style={{ padding: '11px 15px' }}><Tag>{p.sector || 'N/A'}</Tag></td>
                   <td style={{ padding: '11px 15px', textAlign: 'right', fontFamily: T.mono, fontSize: 12, color: T.text }}>{p.quantity}</td>
                   <td style={{ padding: '11px 15px', textAlign: 'right', fontFamily: T.mono, fontSize: 12, color: T.sub }}>
                     ₹{p.avg_cost.toLocaleString('en-IN')}
                   </td>
                   <td style={{ padding: '11px 15px', textAlign: 'right', fontFamily: T.mono, fontSize: 12, color: T.text }}>
-                    ₹{(p.current_price || p.stk?.price || 0).toLocaleString('en-IN')}
+                    ₹{(p.current_price || 0).toLocaleString('en-IN')}
                   </td>
                   <td style={{ padding: '11px 15px', textAlign: 'right', fontFamily: T.mono, fontSize: 12, color: T.text }}>{fI(p.current_value || 0)}</td>
                   <td style={{ padding: '11px 15px', textAlign: 'right', fontFamily: T.mono, fontSize: 12, color: (p.pnl || 0) >= 0 ? T.green : T.red }}>
@@ -280,7 +292,7 @@ export default function Portfolio() {
                   <td style={{ padding: '11px 15px', textAlign: 'right', fontFamily: T.mono, fontSize: 12, color: (p.pnl_pct || 0) >= 0 ? T.green : T.red }}>
                     {pct(p.pnl_pct || 0)}
                   </td>
-                  <td style={{ padding: '11px 15px', textAlign: 'right' }}><Badge v={p.stk?.composite || 0} /></td>
+                  <td style={{ padding: '11px 15px', textAlign: 'right' }}><Badge v={p.factor_score || 0} /></td>
                   <td style={{ padding: '11px 15px', textAlign: 'center' }}>
                     <button
                       onClick={() => handleRemove(p.id)}

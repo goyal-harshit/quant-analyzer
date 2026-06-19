@@ -107,6 +107,7 @@ class ScreenerFilter(BaseModel):
     sort_dir: str = Field(default="desc", description="asc|desc")
     limit: int = Field(default=50, ge=1, le=500)
     offset: int = Field(default=0, ge=0)
+    refresh: Optional[bool] = False
 
 class ScreenerResult(BaseModel):
     ticker: str

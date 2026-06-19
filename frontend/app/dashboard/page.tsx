@@ -1,6 +1,7 @@
 // /frontend/app/page.tsx
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { TrendingUp, TrendingDown, RefreshCw, Layers } from 'lucide-react'
 import { useMarketSummary, useTopGainersLosers, useSectorPerformance, useFactorSignals } from '@/lib/hooks'
@@ -10,12 +11,13 @@ import { scoreColor } from '@/lib/stockData'
 
 export default function Dashboard() {
   const router = useRouter()
+  const [refreshSeed, setRefreshSeed] = useState(0)
 
   // Real hooks querying backend APIs
-  const { data: indices, isLoading: indicesLoading, refetch: refetchIndices } = useMarketSummary()
-  const { data: movers, isLoading: moversLoading } = useTopGainersLosers()
-  const { data: sectorPerf, isLoading: sectorsLoading } = useSectorPerformance()
-  const { data: factorSignals, isLoading: factorsLoading } = useFactorSignals()
+  const { data: indices, isLoading: indicesLoading } = useMarketSummary(refreshSeed)
+  const { data: movers, isLoading: moversLoading } = useTopGainersLosers(refreshSeed)
+  const { data: sectorPerf, isLoading: sectorsLoading } = useSectorPerformance(refreshSeed)
+  const { data: factorSignals, isLoading: factorsLoading } = useFactorSignals(refreshSeed)
 
   const handleStockClick = (ticker: string) => {
     router.push(`/stocks/${ticker}`)
@@ -41,7 +43,7 @@ export default function Dashboard() {
       subtitle="Real-time multi-factor signals & market telemetry"
       actions={
         <button 
-          onClick={() => { refetchIndices() }}
+          onClick={() => { setRefreshSeed(prev => prev + 1) }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-elevated hover:bg-border border border-border rounded-lg text-xs font-semibold text-textSub hover:text-textPrimary transition-all"
         >
           <RefreshCw className="w-3.5 h-3.5" />

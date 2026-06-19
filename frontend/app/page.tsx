@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { RefreshCw } from 'lucide-react'
+import { dashboardApi } from '@/lib/api'
 
 const RAW = [
   ['RELIANCE',  'Reliance Industries',  2891.40, 0.83],
@@ -181,21 +183,51 @@ section,nav,.stats-bar,.cta-section,footer{position:relative;z-index:1}
 @media(max-width:900px){.hero{grid-template-columns:1fr;gap:3rem;padding:8rem 1.5rem 4rem}.ticker-stream{display:none}.stats-inner{grid-template-columns:repeat(2,1fr)}.features-grid{grid-template-columns:repeat(2,1fr)}.ai-section{grid-template-columns:1fr}.tech-grid{grid-template-columns:1fr}.factor-section{grid-template-columns:1fr}.metric-row{grid-template-columns:repeat(2,1fr)}}
 `
 
-const streamList = [...RAW, ...RAW]
-
 export default function LandingPage() {
   const router = useRouter()
-  const [prices, setPrices] = useState(RAW.map(s => ({ t: s[0], p: s[2] as number, n: s[1] as string })))
+  const [universe, setUniverse] = useState<any[]>([])
+  const [marketSummary, setMarketSummary] = useState<any[]>([])
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const fetchData = async () => {
+    setIsRefreshing(true)
+    try {
+      const summary = await dashboardApi.getMarketSummary()
+      const overview = await dashboardApi.getUniverseOverview()
+      setMarketSummary(summary)
+      setUniverse(overview)
+    } catch (err) {
+      console.error("Error fetching landing page live data:", err)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPrices(prev => prev.map(s => ({
-        ...s,
-        p: +(s.p * (1 + (Math.random() - 0.5) * 0.002)).toFixed(2),
-      })))
-    }, 3000)
+    fetchData()
+    const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  const streamList = universe.length > 0
+    ? universe
+    : RAW.map(s => ({ ticker: s[0], name: s[1], price: s[2], change_pct: s[3] }))
+
+  const scrollList = [...streamList, ...streamList]
+
+  const previewScreenerData = universe.length > 0
+    ? [...universe].sort((a, b) => (b.composite_score || 0) - (a.composite_score || 0)).slice(0, 6).map(s => ({
+        t: s.ticker,
+        n: s.name,
+        s: s.sector,
+        p: s.price,
+        c: s.change_pct,
+        pe: s.pe_ratio ?? 25.0,
+        mom: Math.round(s.composite_score * 0.95),
+        qual: Math.round(s.composite_score * 0.85),
+        comp: s.composite_score
+      }))
+    : SCREENER_DATA
 
   return (
     <>
@@ -241,22 +273,31 @@ export default function LandingPage() {
               📡 Live Market Feed
               <span className="live-badge">● LIVE</span>
             </div>
-            <span style={{fontSize:'0.7rem',color:'var(--text-muted)',fontFamily:'var(--font-mono)'}}>NSE · BSE</span>
+            <button
+              onClick={fetchData}
+              disabled={isRefreshing}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-sub)',
+                display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.7rem',
+                fontFamily: 'var(--font-mono)'
+              }}
+            >
+              <RefreshCw style={{ width: 12, height: 12 }} className={isRefreshing ? 'animate-spin' : ''} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
           </div>
           <div className="stream-body">
             <div className="stream-list">
-              {streamList.map((s, i) => {
-                const rnd = (Math.random() - 0.5) * 0.8
-                const chg = +(s[3] as number + rnd).toFixed(2)
+              {scrollList.map((s, i) => {
+                const chg = s.change_pct ?? 0
                 const cls = chg >= 0 ? 'pos' : 'neg'
                 const sign = chg >= 0 ? '+' : ''
-                const price = prices[i % RAW.length]?.p ?? s[2]
                 return (
                   <div key={i} className="stream-item">
-                    <span className="si-ticker">{s[0] as string}</span>
-                    <span className="si-name">{s[1] as string}</span>
-                    <span className="si-price">₹{price.toLocaleString('en-IN')}</span>
-                    <span className={`si-chg ${cls}`}>{sign}{chg}%</span>
+                    <span className="si-ticker">{s.ticker}</span>
+                    <span className="si-name">{s.name}</span>
+                    <span className="si-price">₹{s.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                    <span className={`si-chg ${cls}`}>{sign}{chg.toFixed(2)}%</span>
                   </div>
                 )
               })}
@@ -334,12 +375,20 @@ export default function LandingPage() {
               </div>
               <div className="dash-body">
                 <div className="metric-row">
-                  {[
+                  {(marketSummary.length > 0 ? marketSummary.map(m => {
+                    const isVix = m.name === 'INDIA VIX' || m.name === 'India VIX';
+                    return {
+                      label: m.name,
+                      val: isVix ? m.last.toFixed(2) : '₹' + m.last.toLocaleString('en-IN', { maximumFractionDigits: 0 }),
+                      chg: isVix ? 'Volatility Index' : (m.change_pct >= 0 ? '+' : '') + m.change_pct.toFixed(2) + '%',
+                      cls: isVix ? '' : (m.change_pct >= 0 ? 'pos' : 'neg')
+                    }
+                  }) : [
                     {label:'Nifty 50',val:'₹25,123',chg:'+0.45%',cls:'pos'},
                     {label:'Sensex',val:'₹82,145',chg:'+0.38%',cls:'pos'},
                     {label:'Bank Nifty',val:'₹52,431',chg:'-0.15%',cls:'neg'},
                     {label:'India VIX',val:'13.45',chg:'Volatility Index',cls:''},
-                  ].map(m => (
+                  ]).map(m => (
                     <div key={m.label} className="metric-card">
                       <div className="mc-label">{m.label}</div>
                       <div className="mc-value">{m.val}</div>
@@ -402,7 +451,7 @@ export default function LandingPage() {
           <div className="sc-header">
             <div className="sc-h-left">
               <div className="sc-h-title">🔍 Quant Screener</div>
-              <span className="sc-h-count">{SCREENER_DATA.length} results</span>
+              <span className="sc-h-count">{previewScreenerData.length} results</span>
             </div>
             <div className="filter-chips">
               {['High Momentum','Quality > 60','Large Cap'].map(c => (
@@ -424,7 +473,7 @@ export default function LandingPage() {
               </tr>
             </thead>
             <tbody>
-              {SCREENER_DATA.map(r => {
+              {previewScreenerData.map(r => {
                 const chgCls = r.c >= 0 ? 'pos' : 'neg'
                 const chgSign = r.c >= 0 ? '+' : ''
                 const scorePill = (v: number) => {
@@ -435,9 +484,9 @@ export default function LandingPage() {
                   <tr key={r.t}>
                     <td><span className="td-ticker">{r.t}</span></td>
                     <td><div className="td-name">{r.n}</div><div className="td-sector">{r.s}</div></td>
-                    <td className="td-right">₹{r.p.toLocaleString('en-IN')}</td>
-                    <td className={`td-right ${chgCls}`}>{chgSign}{r.c}%</td>
-                    <td className="td-right" style={{color:'var(--text-sub)'}}>{r.pe}x</td>
+                    <td className="td-right">₹{r.p.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                    <td className={`td-right ${chgCls}`}>{chgSign}{r.c.toFixed(2)}%</td>
+                    <td className="td-right" style={{color:'var(--text-sub)'}}>{r.pe !== null ? r.pe.toFixed(1) + 'x' : 'N/A'}</td>
                     <td className="td-right">{scorePill(r.mom)}</td>
                     <td className="td-right">{scorePill(r.qual)}</td>
                     <td className="td-right">{scorePill(r.comp)}</td>

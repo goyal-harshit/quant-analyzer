@@ -40,7 +40,7 @@ STOCK_MASTER = [
     ("FEDERALBNK", "Federal Bank", "Banking", 162.8, 14.5, 1.9, 13.8, 17.4, 56, 58, 72, 63, 7200),
     ("RBLBANK", "RBL Bank", "Banking", 252.4, 18.7, 2.5, 10.2, 15.1, 41, 42, 68, 52, 5400),
     ("TECHM", "Tech Mahindra", "IT", 1285.6, 20.3, 5.8, 22.4, 6.2, 38, 71, 55, 42, 32400),
-    ("LTI", "LTI Mindtree", "IT", 5487.3, 32.5, 9.2, 28.7, 14.3, 64, 82, 48, 61, 28100),
+    ("LTIM", "LTIMindtree", "IT", 5487.3, 32.5, 9.2, 28.7, 14.3, 64, 82, 48, 61, 28100),
     ("MINDTREE", "Mindtree", "IT", 3845.2, 29.8, 7.6, 31.5, 11.8, 59, 84, 52, 58, 18200),
     ("PERSISTENT", "Persistent Systems", "IT", 4521.6, 35.4, 10.2, 26.8, 17.5, 72, 79, 44, 67, 16700),
     ("CYIENT", "Cyient", "IT", 1876.4, 22.5, 4.8, 19.2, 12.4, 54, 68, 58, 52, 8300),
@@ -59,8 +59,8 @@ STOCK_MASTER = [
     ("AUROPHARMA", "Aurobindo Pharma", "Pharma", 1158.4, 18.5, 3.2, 21.8, 14.5, 58, 65, 65, 59, 14200),
     ("LUPIN", "Lupin", "Pharma", 1624.8, 25.6, 4.5, 15.2, 11.8, 46, 62, 56, 53, 15600),
     ("BIOCON", "Biocon", "Pharma", 324.5, 35.8, 5.8, 12.4, 16.8, 52, 58, 48, 61, 8200),
-    ("TORNETPHARMA", "Torrent Pharma", "Pharma", 2785.6, 32.4, 7.2, 22.8, 13.5, 61, 74, 52, 64, 9500),
-    ("CADILAHC", "Cadila Healthcare", "Pharma", 624.8, 22.5, 4.2, 18.6, 10.2, 44, 63, 59, 52, 12800),
+    ("TORNTPHARM", "Torrent Pharma", "Pharma", 2785.6, 32.4, 7.2, 22.8, 13.5, 61, 74, 52, 64, 9500),
+    ("ZYDUSLIFE", "Cadila Healthcare", "Pharma", 624.8, 22.5, 4.2, 18.6, 10.2, 44, 63, 59, 52, 12800),
     ("GLENMARK", "Glenmark Pharma", "Pharma", 896.4, 26.8, 3.8, 14.5, 8.9, 38, 55, 62, 47, 7200),
     ("BRITANNIA", "Britannia Industries", "FMCG", 5248.6, 52.4, 14.8, 28.5, 7.8, 47, 82, 38, 52, 12500),
     ("DABUR", "Dabur India", "FMCG", 587.4, 45.6, 9.8, 22.4, 6.5, 42, 78, 42, 48, 10200),
@@ -83,7 +83,7 @@ STOCK_MASTER = [
     ("INDUSTOWER", "Indus Towers", "Telecom", 345.8, 28.5, 4.8, 18.5, 12.8, 55, 62, 58, 56, 11300),
     ("SIEMENS", "Siemens India", "Capital Goods", 6254.8, 48.5, 8.5, 18.2, 14.5, 62, 76, 42, 62, 22500),
     ("BHEL", "BHEL", "Capital Goods", 285.6, 32.5, 2.8, 8.5, 22.5, 58, 42, 54, 68, 9500),
-    ("HAVELS", "Havells India", "Capital Goods", 1785.6, 52.8, 9.8, 22.5, 16.8, 64, 78, 42, 66, 11200),
+    ("HAVELLS", "Havells India", "Capital Goods", 1785.6, 52.8, 9.8, 22.5, 16.8, 64, 78, 42, 66, 11200),
     ("ABB", "ABB India", "Capital Goods", 5678.4, 58.6, 12.5, 24.8, 18.5, 68, 80, 38, 68, 10800),
     ("CUMMINS", "Cummins India", "Capital Goods", 3245.8, 42.5, 7.8, 26.4, 15.2, 58, 76, 48, 62, 9200),
     ("ULTRACEMCO", "UltraTech Cement", "Others", 10568.5, 38.5, 4.8, 14.2, 11.5, 55, 68, 58, 58, 36200),
@@ -93,7 +93,7 @@ STOCK_MASTER = [
     ("HINDALCO", "Hindalco Industries", "Others", 625.8, 14.8, 2.2, 17.5, 20.5, 65, 60, 74, 70, 18600),
     ("VEDANTA", "Vedanta Ltd", "Others", 428.6, 10.5, 1.5, 22.4, 25.8, 74, 55, 82, 76, 12200),
     ("INDUSINDBK", "IndusInd Bank", "Others", 1456.8, 18.5, 2.5, 15.8, 19.5, 62, 68, 72, 68, 15200),
-    ("SRTRANSFIN", "Shriram Finance", "Others", 3245.8, 22.5, 3.2, 16.8, 18.5, 58, 65, 65, 64, 9800),
+    ("SHRIRAMFIN", "Shriram Finance", "Others", 3245.8, 22.5, 3.2, 16.8, 18.5, 58, 65, 65, 64, 9800),
     ("DLF", "DLF Ltd", "Others", 865.4, 35.8, 4.5, 12.5, 22.8, 72, 52, 52, 74, 24500),
     ("GODREJPROP", "Godrej Properties", "Others", 2584.6, 42.5, 5.2, 14.8, 28.5, 76, 56, 48, 78, 6800),
     ("ADANIPORTS", "Adani Ports", "Others", 1425.8, 32.5, 4.8, 16.5, 18.5, 68, 64, 58, 65, 32100),
@@ -796,7 +796,7 @@ def get_seed_quote(ticker):
     return {
         "ticker": s["ticker"], "name": s["name"], "sector": s["sector"],
         "price": daily_price, "change": change,
-        "changePercent": change_pct,
+        "change_pct": change_pct,
         "volume": rng.randint(100000, 5000000),
         "marketCap": round(s["marketCap"] * (1 + rng.uniform(-0.01, 0.01)), 0),
     }
@@ -915,7 +915,7 @@ def get_universe_overview():
         s = _stock_dict(entry[0])
         result.append({
             "ticker": q["ticker"], "name": q["name"], "sector": q["sector"],
-            "price": q["price"], "change": q["change"], "change_pct": q.get("changePercent", 0),
+            "price": q["price"], "change": q["change"], "change_pct": q.get("change_pct", 0),
             "volume": q["volume"], "market_cap": q["marketCap"],
         })
     return result
@@ -935,6 +935,8 @@ def get_market_indices():
         indices[-1]["change"] = round(r.uniform(-3, 3), 2)
         indices[-1]["change_pct"] = round(indices[-1]["change"], 2)
     for idx in indices:
+        if idx["name"] == "INDIA VIX":
+            continue
         chg = round(r.uniform(-idx["last"] * 0.01, idx["last"] * 0.01), 2)
         idx["change"] = chg
         idx["change_pct"] = round(chg / idx["last"] * 100, 2)

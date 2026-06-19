@@ -37,9 +37,9 @@ async def list_watchlists(db: AsyncSession = Depends(get_db), current_user: User
 
 
 @router.get("/{watchlist_id}")
-async def get_watchlist(watchlist_id: int, db: AsyncSession = Depends(get_db)):
+async def get_watchlist(watchlist_id: int, refresh: bool = False, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get a specific watchlist with live quote data."""
-    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id))
+    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id, Watchlist.user_id == current_user.id))
     watchlist = res.scalar_one_or_none()
     if not watchlist:
         raise HTTPException(status_code=404, detail="Watchlist not found")
@@ -48,9 +48,10 @@ async def get_watchlist(watchlist_id: int, db: AsyncSession = Depends(get_db)):
     quotes = {}
     if tickers:
         quote_results = await _gather_limited(
-            [data_service.get_quote(t) for t in tickers], limit=10
+            [data_service.get_quote(t, refresh=refresh) for t in tickers], limit=10
         )
-        quotes = dict(zip(tickers, [q for q in quote_results if q]))
+        quote_results_cleaned = [None if isinstance(q, Exception) else q for q in quote_results]
+        quotes = dict(zip(tickers, [q for q in quote_results_cleaned if q]))
 
     return {
         "id": watchlist.id,
@@ -61,9 +62,9 @@ async def get_watchlist(watchlist_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{watchlist_id}/tickers")
-async def update_watchlist_tickers(watchlist_id: int, tickers: list[str], db: AsyncSession = Depends(get_db)):
+async def update_watchlist_tickers(watchlist_id: int, tickers: list[str], db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update the tickers in a watchlist."""
-    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id))
+    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id, Watchlist.user_id == current_user.id))
     watchlist = res.scalar_one_or_none()
     if not watchlist:
         raise HTTPException(status_code=404, detail="Watchlist not found")
@@ -74,9 +75,9 @@ async def update_watchlist_tickers(watchlist_id: int, tickers: list[str], db: As
 
 
 @router.delete("/{watchlist_id}")
-async def delete_watchlist(watchlist_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_watchlist(watchlist_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete a watchlist."""
-    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id))
+    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id, Watchlist.user_id == current_user.id))
     watchlist = res.scalar_one_or_none()
     if not watchlist:
         raise HTTPException(status_code=404, detail="Watchlist not found")
@@ -91,12 +92,13 @@ async def get_watchlist_performance(
     watchlist_id: int,
     benchmark: str = "NIFTY50",
     period: str = "1y",
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get watchlist performance vs benchmark, equal weighted index of tickers.
     """
-    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id))
+    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id, Watchlist.user_id == current_user.id))
     watchlist = res.scalar_one_or_none()
     if not watchlist:
         raise HTTPException(status_code=404, detail="Watchlist not found")
@@ -109,9 +111,11 @@ async def get_watchlist_performance(
     history_dfs = {}
     for t in tickers:
         df = await data_service.get_price_history(t, period=period)
-        if not df.empty:
-            df.columns = [c.lower() for c in df.columns]
-            history_dfs[t] = df["close"]
+        if df is not None and not isinstance(df, Exception) and not df.empty:
+            df_copy = df.copy()
+            df_copy.columns = [c.lower() for c in df_copy.columns]
+            if "close" in df_copy.columns:
+                history_dfs[t] = df_copy["close"]
 
     if not history_dfs:
         return {"performance": [], "benchmark": benchmark}
@@ -124,12 +128,16 @@ async def get_watchlist_performance(
     bench_ticker = "^NSEI" if benchmark.upper() == "NIFTY50" else benchmark
     bench_df = await data_service.get_price_history(bench_ticker, period=period)
     if bench_df.empty:
-        bench_df = await data_service.get_price_history("NIFTY50", period=period)
+        bench_df = await data_service.get_price_history("^NSEI", period=period)
 
     if not bench_df.empty:
-        bench_df.columns = [c.lower() for c in bench_df.columns]
-        bench_growth = bench_df["close"]
-        bench_growth = (bench_growth / bench_growth.iloc[0]) * 100
+        bench_df_copy = bench_df.copy()
+        bench_df_copy.columns = [c.lower() for c in bench_df_copy.columns]
+        if "close" in bench_df_copy.columns:
+            bench_growth = bench_df_copy["close"]
+            bench_growth = (bench_growth / bench_growth.iloc[0]) * 100
+        else:
+            bench_growth = pd.Series(100.0, index=watchlist_growth.index)
     else:
         bench_growth = pd.Series(100.0, index=watchlist_growth.index)
 

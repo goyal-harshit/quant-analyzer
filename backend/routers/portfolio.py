@@ -95,7 +95,7 @@ async def add_position(portfolio_id: int, payload: PositionCreate, db: AsyncSess
 
 
 @router.get("/{portfolio_id}")
-async def get_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_portfolio(portfolio_id: int, refresh: bool = False, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Get full portfolio with live valuations, P&L, and risk analytics
     (beta, Sharpe, volatility, max drawdown vs benchmark).
@@ -118,29 +118,28 @@ async def get_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db), c
 
     tickers = [p.ticker for p in positions]
 
-    # Fetch everything in parallel with bounded concurrency so we don't
-    # trigger Yahoo's HTTP 429 rate-limiter. (Was: serial `for pos in positions`
-    # with 3 awaits per position + 1 benchmark = (3N+1) sequential calls.)
-    # _gather_limited returns a flat list; slice it into groups.
     _all = await _gather_limited(
         [
-            *[data_service.get_quote(t) for t in tickers],
-            *[data_service.get_fundamentals(t) for t in tickers],
-            *[data_service.get_price_history(t, period="1y") for t in tickers],
+            *[data_service.get_quote(t, refresh=refresh) for t in tickers],
+            *[data_service.get_fundamentals(t, refresh=refresh) for t in tickers],
+            *[data_service.get_price_history(t, period="1y", refresh=refresh) for t in tickers],
         ],
         limit=8,
     )
+    
+    _all_cleaned = [None if isinstance(x, Exception) else x for x in _all]
     n = len(tickers)
-    quotes, funds, hists = _all[:n], _all[n:2*n], _all[2*n:]
-    quote_map = dict(zip(tickers, quotes))
-    fund_map = dict(zip(tickers, funds))
-    # Fill sector/industry from hardcoded maps if missing
+    quotes, funds, hists = _all_cleaned[:n], _all_cleaned[n:2*n], _all_cleaned[2*n:]
+    
+    quote_map = {t: (q if isinstance(q, dict) else {}) for t, q in zip(tickers, quotes)}
+    fund_map = {t: (f if isinstance(f, dict) else {}) for t, f in zip(tickers, funds)}
     for t in tickers:
-        f = fund_map.get(t)
-        if f and not f.get("sector"):
-            f["sector"] = data_service._SECTOR_MAP.get(t)
-            f["industry"] = data_service._INDUSTRY_MAP.get(t)
-    hist_map = dict(zip(tickers, hists))
+        f = fund_map.get(t) or {}
+        if not f.get("sector"):
+            f["sector"] = data_service._SECTOR_MAP.get(t) or "Diversified"
+            f["industry"] = data_service._INDUSTRY_MAP.get(t) or "General"
+            fund_map[t] = f
+    hist_map = {t: (h if isinstance(h, pd.DataFrame) else pd.DataFrame()) for t, h in zip(tickers, hists)}
 
     position_outs = []
     total_value = 0.0
@@ -156,6 +155,24 @@ async def get_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db), c
         cost_basis = pos.avg_cost * pos.quantity
         pnl = current_value - cost_basis
 
+        # Get factor score
+        composite = None
+        try:
+            from services.cache_service import cache
+            cv = await cache.get(f"fs_{pos.ticker}")
+            if cv:
+                import json
+                composite = json.loads(cv).get("composite")
+        except Exception:
+            pass
+        if composite is None:
+            try:
+                import services.seed_data as _sd
+                s = _sd._stock_dict(pos.ticker)
+                composite = s.get("composite")
+            except Exception:
+                composite = 60
+
         position_outs.append(PositionOut(
             id=pos.id,
             ticker=pos.ticker,
@@ -166,7 +183,7 @@ async def get_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db), c
             cost_basis=round(cost_basis, 2),
             pnl=round(pnl, 2),
             pnl_pct=round((pnl / cost_basis * 100), 2) if cost_basis > 0 else 0,
-            factor_score=None,  # populate from factor_scores table in production
+            factor_score=composite,
             sector=fund.get("sector"),
         ))
 
@@ -175,9 +192,11 @@ async def get_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db), c
 
         hist = hist_map.get(pos.ticker)
         if hist is not None and not hist.empty:
-            portfolio_returns_components[pos.ticker] = hist["close"] * pos.quantity
+            hist_normalized = hist.copy()
+            hist_normalized.columns = [c.lower() for c in hist_normalized.columns]
+            if "close" in hist_normalized.columns:
+                portfolio_returns_components[pos.ticker] = hist_normalized["close"] * pos.quantity
 
-    # Compute portfolio-level risk metrics
     beta, sharpe, vol, mdd = None, None, None, None
     if portfolio_returns_components:
         portfolio_value_series = pd.DataFrame(portfolio_returns_components).sum(axis=1).dropna()
@@ -187,13 +206,16 @@ async def get_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db), c
             vol = round(float(returns.std() * (252 ** 0.5) * 100), 2)
             mdd = round(PortfolioAnalytics.max_drawdown(portfolio_value_series) * 100, 2)
 
-            # Benchmark fetch — bounded gather, single call
-            (benchmark_hist,) = await _gather_limited(
+            benchmark_res = await _gather_limited(
                 [data_service.get_price_history("^NSEI", period="1y")], limit=1
             )
+            benchmark_hist = benchmark_res[0] if benchmark_res and not isinstance(benchmark_res[0], Exception) else None
             if benchmark_hist is not None and not benchmark_hist.empty:
-                bench_returns = benchmark_hist["close"].pct_change().dropna()
-                beta = round(PortfolioAnalytics.beta(returns, bench_returns), 2)
+                bench_hist_normalized = benchmark_hist.copy()
+                bench_hist_normalized.columns = [c.lower() for c in bench_hist_normalized.columns]
+                if "close" in bench_hist_normalized.columns:
+                    bench_returns = bench_hist_normalized["close"].pct_change().dropna()
+                    beta = round(PortfolioAnalytics.beta(returns, bench_returns), 2)
 
     total_pnl = total_value - total_cost
 
@@ -215,11 +237,16 @@ async def get_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db), c
 
 
 @router.delete("/{portfolio_id}/positions/{position_id}")
-async def remove_position(portfolio_id: int, position_id: int, db: AsyncSession = Depends(get_db)):
+async def remove_position(portfolio_id: int, position_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Remove a position from a portfolio."""
-    result = await db.execute(select(PositionModel).where(PositionModel.id == position_id))
+    result = await db.execute(select(PortfolioModel).where(PortfolioModel.id == portfolio_id, PortfolioModel.user_id == current_user.id))
+    portfolio = result.scalar_one_or_none()
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    result = await db.execute(select(PositionModel).where(PositionModel.id == position_id, PositionModel.portfolio_id == portfolio_id))
     position = result.scalar_one_or_none()
-    if not position or position.portfolio_id != portfolio_id:
+    if not position:
         raise HTTPException(status_code=404, detail="Position not found")
 
     await db.delete(position)
@@ -228,8 +255,13 @@ async def remove_position(portfolio_id: int, position_id: int, db: AsyncSession 
 
 
 @router.get("/{portfolio_id}/sector-allocation")
-async def get_sector_allocation(portfolio_id: int, db: AsyncSession = Depends(get_db)):
+async def get_sector_allocation(portfolio_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get portfolio breakdown by sector — useful for concentration analysis."""
+    result = await db.execute(select(PortfolioModel).where(PortfolioModel.id == portfolio_id, PortfolioModel.user_id == current_user.id))
+    portfolio = result.scalar_one_or_none()
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
     pos_result = await db.execute(
         select(PositionModel).where(PositionModel.portfolio_id == portfolio_id)
     )
@@ -246,15 +278,17 @@ async def get_sector_allocation(portfolio_id: int, db: AsyncSession = Depends(ge
         ],
         limit=8,
     )
+    _all2_cleaned = [None if isinstance(x, Exception) else x for x in _all2]
     n2 = len(tickers)
-    quotes2, funds2 = _all2[:n2], _all2[n2:]
-    quote_map = dict(zip(tickers, quotes2))
-    fund_map = dict(zip(tickers, funds2))
+    quotes2, funds2 = _all2_cleaned[:n2], _all2_cleaned[n2:]
+    quote_map = {t: (q if isinstance(q, dict) else {}) for t, q in zip(tickers, quotes2)}
+    fund_map = {t: (f if isinstance(f, dict) else {}) for t, f in zip(tickers, funds2)}
     for t in tickers:
-        f = fund_map.get(t)
-        if f and not f.get("sector"):
-            f["sector"] = data_service._SECTOR_MAP.get(t)
-            f["industry"] = data_service._INDUSTRY_MAP.get(t)
+        f = fund_map.get(t) or {}
+        if not f.get("sector"):
+            f["sector"] = data_service._SECTOR_MAP.get(t) or "Diversified"
+            f["industry"] = data_service._INDUSTRY_MAP.get(t) or "General"
+            fund_map[t] = f
 
     sector_values: dict = {}
     total = 0.0
@@ -295,6 +329,7 @@ async def get_portfolio_performance(
     portfolio_id: int,
     benchmark: str = "NIFTY50",
     period: str = "1y",
+    refresh: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -315,39 +350,49 @@ async def get_portfolio_performance(
     if not positions:
         return {"performance": [], "benchmark": benchmark}
 
-    # Fetch history for each ticker and weigh them equally or by weight
     import pandas as pd
     history_dfs = {}
     for pos in positions:
-        df = await data_service.get_price_history(pos.ticker, period=period)
+        df = await data_service.get_price_history(pos.ticker, period=period, refresh=refresh)
         if not df.empty:
-            df.columns = [c.lower() for c in df.columns]
-            history_dfs[pos.ticker] = df["close"]
+            df_copy = df.copy()
+            df_copy.columns = [c.lower() for c in df_copy.columns]
+            if "close" in df_copy.columns:
+                history_dfs[pos.ticker] = df_copy["close"]
 
     if not history_dfs:
         return {"performance": [], "benchmark": benchmark}
 
-    # Normalize to 100 at start of the series
-    combined_df = pd.DataFrame(history_dfs).ffill().bfill()
-    portfolio_growth = combined_df.mean(axis=1) # Simple equal weight assumption for historical comparison
+    weighted_history = {}
+    for pos in positions:
+        ticker = pos.ticker
+        if ticker in history_dfs:
+            weighted_history[ticker] = history_dfs[ticker] * pos.quantity
+
+    if not weighted_history:
+        return {"performance": [], "benchmark": benchmark}
+
+    combined_df = pd.DataFrame(weighted_history).ffill().bfill()
+    portfolio_growth = combined_df.sum(axis=1)
     if not portfolio_growth.empty:
         portfolio_growth = (portfolio_growth / portfolio_growth.iloc[0]) * 100
 
-    # Fetch benchmark history
     bench_ticker = "^NSEI" if benchmark.upper() == "NIFTY50" else benchmark
-    bench_df = await data_service.get_price_history(bench_ticker, period=period)
+    bench_df = await data_service.get_price_history(bench_ticker, period=period, refresh=refresh)
     if bench_df.empty:
-        # try yfinance format
-        bench_df = await data_service.get_price_history("NIFTY50", period=period)
+        bench_df = await data_service.get_price_history("^NSEI", period=period, refresh=refresh)
         
     if not bench_df.empty:
-        bench_df.columns = [c.lower() for c in bench_df.columns]
-        bench_growth = bench_df["close"]
-        bench_growth = (bench_growth / bench_growth.iloc[0]) * 100
+        bench_df_copy = bench_df.copy()
+        bench_df_copy.columns = [c.lower() for c in bench_df_copy.columns]
+        if "close" in bench_df_copy.columns:
+            bench_growth = bench_df_copy["close"]
+            bench_growth = (bench_growth / bench_growth.iloc[0]) * 100
+        else:
+            bench_growth = pd.Series(100.0, index=portfolio_growth.index)
     else:
         bench_growth = pd.Series(100.0, index=portfolio_growth.index)
 
-    # Combine response
     performance_data = []
     for idx in portfolio_growth.index:
         date_str = idx.strftime("%Y-%m-%d")

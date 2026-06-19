@@ -32,11 +32,11 @@ async def screen_stocks(filters: ScreenerFilter):
     # Single parallel batch: fundamentals + history + quotes all at once
     all_coros = []
     for t in universe:
-        all_coros.append(data_service.get_fundamentals(t))
+        all_coros.append(data_service.get_fundamentals(t, refresh=filters.refresh))
     for t in universe:
-        all_coros.append(data_service.get_price_history(t, period="1y"))
+        all_coros.append(data_service.get_price_history(t, period="1y", refresh=filters.refresh))
     for t in universe:
-        all_coros.append(data_service.get_quote(t))
+        all_coros.append(data_service.get_quote(t, refresh=filters.refresh))
 
     all_results = await _gather_limited(all_coros, limit=20)
     n = len(universe)

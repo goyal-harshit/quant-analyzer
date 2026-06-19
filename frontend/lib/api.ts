@@ -84,6 +84,7 @@ export interface ScreenerResult {
   pe_ratio: number | null;
   pb_ratio: number | null;
   roe: number | null;
+  revenue_growth: number | null;
   momentum_score: number | null;
   quality_score: number | null;
   value_score: number | null;
@@ -113,14 +114,14 @@ export interface BacktestMetrics {
 
 // ── STOCKS ──────────────────────────────────────────────────────
 export const stocksApi = {
-  getQuote: (ticker: string) =>
-    client.get<StockQuote>(`/stocks/${ticker}/quote`).then((r) => r.data),
+  getQuote: (ticker: string, refresh = false) =>
+    client.get<StockQuote>(`/stocks/${ticker}/quote`, { params: { refresh } }).then((r) => r.data),
 
-  getHistory: (ticker: string, period = "1y") =>
-    client.get(`/stocks/${ticker}/history`, { params: { period } }).then((r) => r.data),
+  getHistory: (ticker: string, period = "1y", refresh = false) =>
+    client.get(`/stocks/${ticker}/history`, { params: { period, refresh } }).then((r) => r.data),
 
-  getFundamentals: (ticker: string) =>
-    client.get<Fundamentals>(`/stocks/${ticker}/fundamentals`).then((r) => r.data),
+  getFundamentals: (ticker: string, refresh = false) =>
+    client.get<Fundamentals>(`/stocks/${ticker}/fundamentals`, { params: { refresh } }).then((r) => r.data),
 
   getFactors: (ticker: string) =>
     client.get(`/stocks/${ticker}/factors`).then((r) => r.data),
@@ -128,8 +129,8 @@ export const stocksApi = {
   getTechnicals: (ticker: string) =>
     client.get(`/stocks/${ticker}/technicals`).then((r) => r.data),
 
-  getBatchQuotes: (tickers: string[]) =>
-    client.get(`/stocks/batch/quotes`, { params: { tickers: tickers.join(",") } }).then((r) => r.data),
+  getBatchQuotes: (tickers: string[], refresh = false) =>
+    client.get(`/stocks/batch/quotes`, { params: { tickers: tickers.join(","), refresh } }).then((r) => r.data),
 
   search: (query: string) =>
     client.get(`/stocks/search`, { params: { q: query } }).then((r) => r.data),
@@ -153,7 +154,7 @@ export const portfolioApi = {
   create: (data: { name: string; currency?: string; benchmark?: string }) =>
     client.post("/portfolio", data).then((r) => r.data),
 
-  get: (id: number) => client.get(`/portfolio/${id}`).then((r) => r.data),
+  get: (id: number, refresh = false) => client.get(`/portfolio/${id}`, { params: { refresh } }).then((r) => r.data),
 
   addPosition: (portfolioId: number, position: { ticker: string; quantity: number; avg_cost: number }) =>
     client.post(`/portfolio/${portfolioId}/positions`, position).then((r) => r.data),
@@ -167,8 +168,8 @@ export const portfolioApi = {
   delete: (id: number) =>
     client.delete(`/portfolio/${id}`).then((r) => r.data),
 
-  getPerformance: (id: number, benchmark = "NIFTY50", period = "1y") =>
-    client.get(`/portfolio/${id}/performance`, { params: { benchmark, period } }).then((r) => r.data),
+  getPerformance: (id: number, benchmark = "NIFTY50", period = "1y", refresh = false) =>
+    client.get(`/portfolio/${id}/performance`, { params: { benchmark, period, refresh } }).then((r) => r.data),
 };
 
 // ── BACKTEST ────────────────────────────────────────────────────
@@ -212,23 +213,23 @@ export const aiApi = {
 
 // ── DASHBOARD ────────────────────────────────────────────────────
 export const dashboardApi = {
-  getMarketSummary: () =>
-    client.get("/dashboard/market-summary").then((r) => r.data),
+  getMarketSummary: (refresh = false) =>
+    client.get("/dashboard/market-summary", { params: { refresh } }).then((r) => r.data),
 
-  getTopMovers: () =>
-    client.get("/dashboard/top-gainers-losers").then((r) => r.data),
+  getTopMovers: (refresh = false) =>
+    client.get("/dashboard/top-gainers-losers", { params: { refresh } }).then((r) => r.data),
 
-  getTopGainersLosers: () =>
-    client.get("/dashboard/top-gainers-losers").then((r) => r.data),
+  getTopGainersLosers: (refresh = false) =>
+    client.get("/dashboard/top-gainers-losers", { params: { refresh } }).then((r) => r.data),
 
-  getSectorPerformance: () =>
-    client.get("/dashboard/sector-performance").then((r) => r.data),
+  getSectorPerformance: (refresh = false) =>
+    client.get("/dashboard/sector-performance", { params: { refresh } }).then((r) => r.data),
 
-  getFactorSignals: () =>
-    client.get("/dashboard/factor-signals").then((r) => r.data),
+  getFactorSignals: (refresh = false) =>
+    client.get("/dashboard/factor-signals", { params: { refresh } }).then((r) => r.data),
 
-  getUniverseOverview: () =>
-    client.get("/dashboard/universe-overview").then((r) => r.data),
+  getUniverseOverview: (refresh = false) =>
+    client.get("/dashboard/universe-overview", { params: { refresh } }).then((r) => r.data),
 };
 
 // ── NEWS ──────────────────────────────────────────────────────────
@@ -275,8 +276,8 @@ export const watchlistsApi = {
   list: () =>
     client.get("/watchlists").then((r) => r.data),
 
-  get: (id: number) =>
-    client.get(`/watchlists/${id}`).then((r) => r.data),
+  get: (id: number, refresh = false) =>
+    client.get(`/watchlists/${id}`, { params: { refresh } }).then((r) => r.data),
 
   updateTickers: (id: number, tickers: string[]) =>
     client.put(`/watchlists/${id}/tickers`, tickers).then((r) => r.data),
@@ -320,8 +321,8 @@ export const authApi = {
 
 // ── STOCK INSIGHT (consolidated — replaces 4+ sequential calls) ─────
 export const insightApi = {
-  getStockInsight: (ticker: string, includeAi = false) =>
-    client.get(`/insight/${ticker}`, { params: { include_ai: includeAi } }).then((r) => r.data),
+  getStockInsight: (ticker: string, includeAi = false, refresh = false) =>
+    client.get(`/insight/${ticker}`, { params: { include_ai: includeAi, refresh } }).then((r) => r.data),
 };
 
 export default client;

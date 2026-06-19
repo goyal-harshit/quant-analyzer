@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await authApi.login(params)
     localStorage.setItem('token', res.access_token)
     await fetchUser()
-    router.push('/')
+    router.push('/dashboard')
   }
 
   const register = async (email: string, password: string) => {

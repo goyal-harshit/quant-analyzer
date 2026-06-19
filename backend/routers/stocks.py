@@ -24,10 +24,10 @@ async def search_stocks(q: str = Query(..., description="Search by company name 
 
 
 @router.get("/{ticker}/quote")
-async def get_quote(ticker: str):
+async def get_quote(ticker: str, refresh: bool = False):
     """Get current price quote for a stock."""
     t = ticker.upper()
-    quote = await data_service.get_quote(t)
+    quote = await data_service.get_quote(t, refresh=refresh)
     if not quote or not quote.get("price"):
         logger.info("Falling back to seed data for %s quote", t)
         quote = get_seed_quote(t)
@@ -35,10 +35,10 @@ async def get_quote(ticker: str):
 
 
 @router.get("/{ticker}/fundamentals")
-async def get_fundamentals(ticker: str):
+async def get_fundamentals(ticker: str, refresh: bool = False):
     """Get fundamental ratios for a stock."""
     t = ticker.upper()
-    data = await data_service.get_fundamentals(t)
+    data = await data_service.get_fundamentals(t, refresh=refresh)
     if not data:
         logger.info("Falling back to seed data for %s fundamentals", t)
         data = get_seed_fundamentals(t)
@@ -54,10 +54,11 @@ async def get_price_history(
     ticker: str,
     period: str = Query(default="1y", description="1mo|3mo|6mo|1y|2y|5y|max"),
     interval: str = Query(default="1d", description="1d|1wk|1mo"),
+    refresh: bool = False,
 ):
     """Get OHLCV price history."""
     t = ticker.upper()
-    df = await data_service.get_price_history(t, period, interval)
+    df = await data_service.get_price_history(t, period, interval, refresh=refresh)
     if df.empty:
         # Trigger on-demand ingestion
         df = await data_service.ingest_on_demand(t, period, interval)
@@ -143,10 +144,10 @@ async def get_technicals(ticker: str):
 
 
 @router.get("/batch/quotes")
-async def get_batch_quotes(tickers: str = Query(..., description="Comma-separated tickers")):
+async def get_batch_quotes(tickers: str = Query(..., description="Comma-separated tickers"), refresh: bool = False):
     """Get quotes for multiple tickers at once."""
     ticker_list = [t.strip().upper() for t in tickers.split(",")]
     if len(ticker_list) > 100:
         raise HTTPException(status_code=400, detail="Max 100 tickers per batch request")
-    quotes = await data_service.get_batch_quotes(ticker_list)
+    quotes = await data_service.get_batch_quotes(ticker_list, refresh=refresh)
     return quotes

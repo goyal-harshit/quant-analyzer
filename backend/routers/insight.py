@@ -18,7 +18,8 @@ router = APIRouter()
 async def get_stock_insight(
     ticker: str,
     include_ai: bool = Query(default=False, description="Include AI-generated summary (adds ~2-5s)"),
+    refresh: bool = Query(default=False, description="Bypass cache and force a live refresh"),
 ):
     """Get full stock insight in one call — quote, fundamentals, history, technicals, factors, peers, AI."""
-    result = await insight_agent.get_insight(ticker.upper(), include_ai=include_ai)
+    result = await insight_agent.get_insight(ticker.upper(), include_ai=include_ai, refresh=refresh)
     return result

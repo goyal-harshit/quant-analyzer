@@ -22,12 +22,13 @@ export default function StockDetail() {
   const ticker = (params.ticker as string).toUpperCase()
   
   const [includeAi, setIncludeAi] = useState(true)
+  const [refreshSeed, setRefreshSeed] = useState(0)
   
   // Real data fetching hooks
-  const { data: quote, isLoading: quoteLoading, refetch: refetchQuote } = useStockQuote(ticker)
-  const { data: fundamentals, isLoading: fundLoading } = useStockFundamentals(ticker)
-  const { data: historyData, isLoading: historyLoading } = useStockHistory(ticker, '5y')
-  const { data: insight, isLoading: insightLoading, refetch: refetchInsight } = useStockInsight(ticker, includeAi)
+  const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker, refreshSeed)
+  const { data: fundamentals, isLoading: fundLoading } = useStockFundamentals(ticker, refreshSeed)
+  const { data: historyData, isLoading: historyLoading } = useStockHistory(ticker, '5y', refreshSeed)
+  const { data: insight, isLoading: insightLoading } = useStockInsight(ticker, includeAi, refreshSeed)
 
   const handleBack = () => {
     router.push('/screener')
@@ -105,8 +106,7 @@ export default function StockDetail() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              refetchQuote()
-              refetchInsight()
+              setRefreshSeed(prev => prev + 1)
             }}
             className="flex items-center justify-center p-2 bg-elevated border border-border/80 hover:bg-border/40 text-textSub hover:text-textPrimary rounded-lg transition-all"
             title="Refresh Feed"
@@ -175,15 +175,23 @@ export default function StockDetail() {
             <Award className="w-3.5 h-3.5 text-success" />
           </div>
           <div className="mt-1.5 flex items-baseline gap-2.5">
-            <span 
-              className="text-3xl font-mono font-black"
-              style={{ color: scoreColor(fundamentals?.factor_scores?.composite ?? 50) }}
-            >
-              {fundamentals?.factor_scores?.composite ?? '50'}
-            </span>
-            <span className="text-[9px] text-textMuted uppercase font-bold tracking-widest">
-              Percentile
-            </span>
+            {fundamentals?.factor_scores?.composite !== null && fundamentals?.factor_scores?.composite !== undefined ? (
+              <>
+                <span 
+                  className="text-3xl font-mono font-black"
+                  style={{ color: scoreColor(fundamentals.factor_scores.composite) }}
+                >
+                  {Math.round(fundamentals.factor_scores.composite)}
+                </span>
+                <span className="text-[9px] text-textMuted uppercase font-bold tracking-widest">
+                  Percentile
+                </span>
+              </>
+            ) : (
+              <span className="text-3xl font-mono font-black text-textMuted">
+                N/A
+              </span>
+            )}
           </div>
           <div className="text-[9px] text-textSub mt-2.5 flex items-center gap-1 font-semibold uppercase">
             <Sparkles className="w-3 h-3 text-success animate-pulse" />
@@ -236,7 +244,7 @@ export default function StockDetail() {
               </div>
 
               <button
-                onClick={() => refetchInsight()}
+                onClick={() => setRefreshSeed(prev => prev + 1)}
                 disabled={insightLoading}
                 className="flex items-center gap-1.5 px-2.5 py-1 bg-brand text-white border border-brand/50 hover:bg-brand/80 rounded-md text-[10px] font-bold transition-all shadow-md shadow-brand/20 disabled:opacity-50"
               >
@@ -320,36 +328,44 @@ export default function StockDetail() {
             
             <div className="space-y-4.5">
               {[
-                { name: 'Momentum', val: fundamentals?.factor_scores?.momentum ?? 50 },
-                { name: 'Quality', val: fundamentals?.factor_scores?.quality ?? 50 },
-                { name: 'Value', val: fundamentals?.factor_scores?.value ?? 50 },
-                { name: 'Growth', val: fundamentals?.factor_scores?.growth ?? 50 },
-                { name: 'Low Volatility', val: fundamentals?.factor_scores?.low_volatility ?? 50 },
-              ].map((f) => (
-                <div key={f.name} className="space-y-1.5 group">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-textSub font-medium group-hover:text-textPrimary transition-colors">
-                      {f.name}
-                    </span>
-                    <span 
-                      className="font-mono font-bold text-xs" 
-                      style={{ color: scoreColor(f.val) }}
-                    >
-                      {f.val}/100
-                    </span>
+                { name: 'Momentum', val: fundamentals?.factor_scores?.momentum },
+                { name: 'Quality', val: fundamentals?.factor_scores?.quality },
+                { name: 'Value', val: fundamentals?.factor_scores?.value },
+                { name: 'Growth', val: fundamentals?.factor_scores?.growth },
+                { name: 'Low Volatility', val: fundamentals?.factor_scores?.low_volatility },
+              ].map((f) => {
+                const hasScore = f.val !== null && f.val !== undefined
+                const scoreDisplay = hasScore ? `${Math.round(f.val)}/100` : 'N/A'
+                const progressWidth = hasScore ? `${f.val}%` : '0%'
+                const barColor = hasScore ? scoreColor(f.val) : '#475569'
+
+                return (
+                  <div key={f.name} className="space-y-1.5 group">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-textSub font-medium group-hover:text-textPrimary transition-colors">
+                        {f.name}
+                      </span>
+                      <span 
+                        className="font-mono font-bold text-xs" 
+                        style={{ color: barColor }}
+                      >
+                        {scoreDisplay}
+                      </span>
+                    </div>
+                    {/* Progress track */}
+                    <div className="h-2 bg-elevated rounded-full overflow-hidden border border-border/40 p-0.5">
+                      <div 
+                        className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r" 
+                        style={{ 
+                          width: progressWidth,
+                          backgroundImage: hasScore ? `linear-gradient(90deg, #f43f5e, ${barColor})` : 'none',
+                          backgroundColor: !hasScore ? '#475569' : undefined
+                        }} 
+                      />
+                    </div>
                   </div>
-                  {/* Progress track */}
-                  <div className="h-2 bg-elevated rounded-full overflow-hidden border border-border/40 p-0.5">
-                    <div 
-                      className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r" 
-                      style={{ 
-                        width: `${f.val}%`,
-                        backgroundImage: `linear-gradient(90deg, #f43f5e, ${scoreColor(f.val)})`
-                      }} 
-                    />
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
