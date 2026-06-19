@@ -126,11 +126,21 @@ Give exactly 4 short bullet points (1 line each):
 
 Be brief. Use numbers. No headers."""
 
+    SYSTEM_PROMPT_INSIGHT = """You are a quantitative equity analyst specializing in Indian equities.
+    Provide a very brief 4-bullet analysis.
+    You must output exactly 4 bullet points, one for each category: Valuation, Momentum, Risk, and Verdict.
+    Be concise, use numbers, and do not include headers or other text.
+    Format precisely as:
+    - Valuation: [details]
+    - Momentum: [details]
+    - Risk: [details]
+    - Verdict: [details]"""
+
     analysis = "Analysis unavailable"
     try:
         result = await asyncio.wait_for(
-            ai_service._generate(SYSTEM_PROMPT_ANALYST, [{"role": "user", "content": prompt}], max_tokens=300),
-            timeout=5.0,
+            ai_service._generate(SYSTEM_PROMPT_INSIGHT, [{"role": "user", "content": prompt}], max_tokens=300),
+            timeout=25.0,
         )
         analysis = result.get("content", analysis)
     except Exception:

@@ -277,7 +277,26 @@ class AIService:
 
     # ── STOCK REPORT ─────────────────────────────────────────────
     async def generate_stock_report(self, stock_data: dict, report_type: str = "full") -> str:
-        prompt = f"""Analyze {stock_data.get('name')} ({stock_data.get('ticker')}, NSE):
+        system_prompt = SYSTEM_PROMPT_ANALYST
+        max_tokens = 1200
+        
+        if report_type == "brief":
+            system_prompt = """You are a quantitative equity analyst specializing in Indian equities.
+Provide a very brief 4-bullet analysis.
+You must output exactly 4 bullet points, one for each category: Valuation, Momentum, Risk, and Verdict.
+Be concise, use numbers, and do not include headers or other text.
+Format precisely as:
+- Valuation: [details]
+- Momentum: [details]
+- Risk: [details]
+- Verdict: [details]"""
+            prompt = f"""Analyze {stock_data.get('name')} ({stock_data.get('ticker')}, NSE) with this data:
+Price: ₹{stock_data.get('price')} | Change: {stock_data.get('change_pct')}%
+PE: {stock_data.get('pe_ratio')}x | PB: {stock_data.get('pb_ratio')}x | ROE: {stock_data.get('roe')}% | Revenue Growth: {stock_data.get('revenue_growth')}%
+Factor Scores (0-100): Momentum {stock_data.get('momentum_score')} | Quality {stock_data.get('quality_score')} | Value {stock_data.get('value_score')} | Growth {stock_data.get('growth_score')} | Composite {stock_data.get('composite_score')}"""
+            max_tokens = 300
+        else:
+            prompt = f"""Analyze {stock_data.get('name')} ({stock_data.get('ticker')}, NSE):
 
 Price: ₹{stock_data.get('price')} | Change: {stock_data.get('change_pct')}%
 Sector: {stock_data.get('sector')} | Market Cap: ₹{stock_data.get('market_cap')} Cr
@@ -292,7 +311,7 @@ Momentum {stock_data.get('momentum_score')} | Quality {stock_data.get('quality_s
 
 Report type requested: {report_type}"""
 
-        result = await self._generate(SYSTEM_PROMPT_ANALYST, [{"role": "user", "content": prompt}], max_tokens=1200)
+        result = await self._generate(system_prompt, [{"role": "user", "content": prompt}], max_tokens=max_tokens)
         if result.get("source") == "ollama":
             return result["content"]
         # Fallback to offline rule-based report

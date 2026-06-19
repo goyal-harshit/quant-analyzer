@@ -95,7 +95,7 @@ export default function StockDetail() {
   const changePct = quote?.change_pct ?? 0
   const isPositive = changePct >= 0
   const history = historyData?.data ?? []
-  const parsedAi = parseAIAnalysis(insight?.analysis)
+  const parsedAi = parseAIAnalysis(insight?.ai_summary)
 
   return (
     <PageShell 
@@ -297,7 +297,7 @@ export default function StockDetail() {
               ) : (
                 /* Raw fallback layout */
                 <div className="text-xs text-textPrimary leading-relaxed whitespace-pre-line font-mono bg-elevated/20 p-3 rounded-lg border border-border/30">
-                  {insight?.analysis || 'No AI insights have been compiled for this stock yet. Click analyze to trigger.'}
+                  {insight?.ai_summary || 'No AI insights have been compiled for this stock yet. Click analyze to trigger.'}
                 </div>
               )}
             </div>
