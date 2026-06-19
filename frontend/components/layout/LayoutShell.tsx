@@ -1,7 +1,7 @@
 // /frontend/components/layout/LayoutShell.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import { usePathname } from 'next/navigation'
@@ -16,6 +16,18 @@ export default function LayoutShell({ children }: LayoutShellProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const pathname = usePathname()
   const isAuthPage = pathname === '/login' || pathname === '/register'
+
+  // Global Ctrl+K handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   if (isAuthPage) {
     return <div className="min-h-screen bg-bg">{children}</div>

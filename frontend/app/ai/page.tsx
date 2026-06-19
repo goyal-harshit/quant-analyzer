@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, MessageSquare, Cpu, RefreshCw } from 'lucide-react'
 import { STOCKS, MACRO, BT_STATS, T, pct } from '@/lib/stockData'
+import { aiApi } from '@/lib/api'
 
 const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
 const sc = v => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
@@ -60,13 +61,7 @@ export default function AIChat() {
     setLoad(true)
     try {
       const apiMsgs = next.filter((m, i) => !(m.role === 'assistant' && i === 0)).map(m => ({ role: m.role, content: m.content }))
-      const res = await fetch('/api/v1/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMsgs }),
-      })
-      if (!res.ok) throw new Error('API unreachable')
-      const d = await res.json()
+      const d = await aiApi.chat({ messages: apiMsgs })
       setMsgs(p => [...p, { role: 'assistant', content: d.response || d.content, source: 'ollama' }])
     } catch {
       setMsgs(p => [...p, { role: 'assistant', content: buildOfflineChatReply(q), source: 'offline' }])
