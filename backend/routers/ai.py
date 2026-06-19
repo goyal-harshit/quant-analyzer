@@ -140,7 +140,7 @@ Be brief. Use numbers. No headers."""
     try:
         result = await asyncio.wait_for(
             ai_service._generate(SYSTEM_PROMPT_INSIGHT, [{"role": "user", "content": prompt}], max_tokens=300),
-            timeout=25.0,
+            timeout=120.0,
         )
         analysis = result.get("content", analysis)
     except Exception:
