@@ -46,7 +46,7 @@ Your expertise covers:
 Guidelines:
 - Use ₹ (Rupee) for currency references
 - Reference specific Indian regulatory bodies (SEBI, RBI, MOSPI, NSE, BSE) where relevant
-- Keep analysis data-driven, structured, and concise
+- Keep analysis data-driven, structured, and extremely brief (maximum of 2-3 sentences or 85 words).
 - Never give explicit buy/sell recommendations — provide analytical frameworks instead
 - Always end responses with a brief disclaimer about educational purpose
 """
@@ -257,7 +257,7 @@ class AIService:
         if context_ticker:
             system += f"\n\nThe user is currently viewing: {context_ticker}. Bias your answer toward this stock if relevant."
 
-        result = await self._generate(system, messages, max_tokens=900)
+        result = await self._generate(system, messages, max_tokens=300)
         if result.get("source") == "ollama":
             return {
                 "response": result["content"],
