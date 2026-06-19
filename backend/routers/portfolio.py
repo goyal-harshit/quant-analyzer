@@ -289,3 +289,78 @@ async def delete_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db)
     await db.commit()
     return {"deleted": True, "id": portfolio_id}
 
+
+@router.get("/{portfolio_id}/performance")
+async def get_portfolio_performance(
+    portfolio_id: int,
+    benchmark: str = "NIFTY50",
+    period: str = "1y",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get portfolio performance vs a benchmark, normalized to 100 at start.
+    """
+    res = await db.execute(
+        select(PortfolioModel).where(PortfolioModel.id == portfolio_id, PortfolioModel.user_id == current_user.id)
+    )
+    portfolio = res.scalar_one_or_none()
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    pos_res = await db.execute(
+        select(PositionModel).where(PositionModel.portfolio_id == portfolio_id)
+    )
+    positions = pos_res.scalars().all()
+    if not positions:
+        return {"performance": [], "benchmark": benchmark}
+
+    # Fetch history for each ticker and weigh them equally or by weight
+    import pandas as pd
+    history_dfs = {}
+    for pos in positions:
+        df = await data_service.get_price_history(pos.ticker, period=period)
+        if not df.empty:
+            df.columns = [c.lower() for c in df.columns]
+            history_dfs[pos.ticker] = df["close"]
+
+    if not history_dfs:
+        return {"performance": [], "benchmark": benchmark}
+
+    # Normalize to 100 at start of the series
+    combined_df = pd.DataFrame(history_dfs).ffill().bfill()
+    portfolio_growth = combined_df.mean(axis=1) # Simple equal weight assumption for historical comparison
+    if not portfolio_growth.empty:
+        portfolio_growth = (portfolio_growth / portfolio_growth.iloc[0]) * 100
+
+    # Fetch benchmark history
+    bench_ticker = "^NSEI" if benchmark.upper() == "NIFTY50" else benchmark
+    bench_df = await data_service.get_price_history(bench_ticker, period=period)
+    if bench_df.empty:
+        # try yfinance format
+        bench_df = await data_service.get_price_history("NIFTY50", period=period)
+        
+    if not bench_df.empty:
+        bench_df.columns = [c.lower() for c in bench_df.columns]
+        bench_growth = bench_df["close"]
+        bench_growth = (bench_growth / bench_growth.iloc[0]) * 100
+    else:
+        bench_growth = pd.Series(100.0, index=portfolio_growth.index)
+
+    # Combine response
+    performance_data = []
+    for idx in portfolio_growth.index:
+        date_str = idx.strftime("%Y-%m-%d")
+        port_val = float(portfolio_growth.loc[idx])
+        bench_val = float(bench_growth.loc[idx]) if idx in bench_growth.index else 100.0
+        performance_data.append({
+            "date": date_str,
+            "portfolio": round(port_val, 2),
+            "benchmark": round(bench_val, 2),
+        })
+
+    return {
+        "performance": performance_data,
+        "benchmark": benchmark,
+    }
+

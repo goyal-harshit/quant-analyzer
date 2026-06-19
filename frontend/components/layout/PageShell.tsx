@@ -1,27 +1,33 @@
-'use client'
-
+// /frontend/components/layout/PageShell.tsx
 import React from 'react'
 
 interface PageShellProps {
   title: string
   subtitle?: string
+  actions?: React.ReactNode     // right-side action buttons
   children: React.ReactNode
-  actions?: React.ReactNode
 }
 
-export default function PageShell({ title, subtitle, children, actions }: PageShellProps) {
+export default function PageShell({ title, subtitle, actions, children }: PageShellProps) {
   return (
-    <div className="p-6 md:p-8 pt-24 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="flex flex-col gap-6">
+      {/* Page Header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-textPrimary">{title}</h1>
-          {subtitle && <p className="text-sm text-textSub mt-1">{subtitle}</p>}
+          <h1 className="page-title">{title}</h1>
+          {subtitle && (
+            <p className="text-sm text-textSub mt-1">{subtitle}</p>
+          )}
         </div>
-        {actions && <div className="flex items-center gap-3">{actions}</div>}
+        {actions && (
+          <div className="flex items-center gap-2 flex-shrink-0 pt-1">
+            {actions}
+          </div>
+        )}
       </div>
-      <div className="w-full">
-        {children}
-      </div>
+
+      {/* Page Content */}
+      {children}
     </div>
   )
 }

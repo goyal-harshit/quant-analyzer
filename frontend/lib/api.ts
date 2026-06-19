@@ -47,15 +47,24 @@ export interface Fundamentals {
   pb_ratio: number | null;
   ev_ebitda?: number | null;
   ps_ratio?: number | null;
+  peg_ratio?: number | null;
   roe: number | null;
+  roce?: number | null;
   roa?: number | null;
   net_margin?: number | null;
   operating_margin?: number | null;
   current_ratio?: number | null;
-  revenue_growth: number | null;
+  quick_ratio?: number | null;
   debt_equity: number | null;
-  sector: string | null;
+  interest_coverage?: number | null;
+  revenue_growth: number | null;
+  dividend_yield?: number | null;
   market_cap: number | null;
+  book_value?: number | null;
+  face_value?: number | null;
+  sector: string | null;
+  industry?: string | null;
+  exchange?: string | null;
   factor_scores?: {
     momentum?: number;
     quality?: number;
@@ -157,6 +166,9 @@ export const portfolioApi = {
 
   delete: (id: number) =>
     client.delete(`/portfolio/${id}`).then((r) => r.data),
+
+  getPerformance: (id: number, benchmark = "NIFTY50", period = "1y") =>
+    client.get(`/portfolio/${id}/performance`, { params: { benchmark, period } }).then((r) => r.data),
 };
 
 // ── BACKTEST ────────────────────────────────────────────────────
@@ -271,6 +283,9 @@ export const watchlistsApi = {
 
   delete: (id: number) =>
     client.delete(`/watchlists/${id}`).then((r) => r.data),
+
+  getPerformance: (id: number, benchmark = "NIFTY50", period = "1y") =>
+    client.get(`/watchlists/${id}/performance`, { params: { benchmark, period } }).then((r) => r.data),
 };
 
 // ── ALERTS ────────────────────────────────────────────────────────

@@ -56,12 +56,20 @@ async def get_price_history(
     interval: str = Query(default="1d", description="1d|1wk|1mo"),
 ):
     """Get OHLCV price history."""
-    df = await data_service.get_price_history(ticker.upper(), period, interval)
+    t = ticker.upper()
+    df = await data_service.get_price_history(t, period, interval)
+    if df.empty:
+        # Trigger on-demand ingestion
+        df = await data_service.ingest_on_demand(t, period, interval)
+        
     if df.empty:
         raise HTTPException(status_code=404, detail=f"No price history for {ticker}")
 
+    # Normalize headers to lowercase
+    df.columns = [c.lower() for c in df.columns]
+
     return {
-        "ticker": ticker.upper(),
+        "ticker": t,
         "data": [
             {
                 "date": idx.strftime("%Y-%m-%d"),

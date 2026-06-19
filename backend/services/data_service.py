@@ -89,6 +89,51 @@ class DataService:
         self.client = httpx.AsyncClient(timeout=20.0)
 
     # ── PRICE HISTORY ─────────────────────────────────────────────
+    async def ingest_on_demand(self, ticker: str, period: str = "5y", interval: str = "1d") -> pd.DataFrame:
+        """Fetch 5-year data dynamically if missing and ingest it in database."""
+        t = ticker.upper()
+        df = await self._fetch_fast_history(t, period, interval)
+        if df is None or df.empty:
+            df = await self._fetch_yfinance_history(t, period, interval)
+        
+        # Save to database asynchronously to populate cache
+        if df is not None and not df.empty:
+            try:
+                from models.database import AsyncSessionLocal, PriceData
+                from datetime import datetime
+                async with AsyncSessionLocal() as db:
+                    # Check existing dates
+                    from sqlalchemy import select
+                    stmt = select(PriceData.date).where(PriceData.ticker == t)
+                    res = await db.execute(stmt)
+                    existing_dates = set(d.date() for d in res.scalars().all())
+
+                    new_records = []
+                    for dt, row in df.iterrows():
+                        date_only = dt.date()
+                        if date_only not in existing_dates:
+                            dt_obj = datetime(dt.year, dt.month, dt.day)
+                            new_records.append(
+                                PriceData(
+                                    ticker=t,
+                                    date=dt_obj,
+                                    open=float(row["open"]),
+                                    high=float(row["high"]),
+                                    low=float(row["low"]),
+                                    close=float(row["close"]),
+                                    adj_close=float(row.get("adj_close", row["close"])),
+                                    volume=int(row["volume"]),
+                                )
+                            )
+                    if new_records:
+                        db.add_all(new_records)
+                        await db.commit()
+                        logger.info(f"On-demand: Ingested {len(new_records)} bars for {t}.")
+            except Exception as e:
+                logger.error(f"Failed to save on-demand history for {t}: {e}")
+
+        return df
+
     async def get_price_history(
         self, ticker: str, period: str = "2y", interval: str = "1d"
     ) -> pd.DataFrame:
@@ -367,6 +412,83 @@ class DataService:
         "SHRIRAMFIN":"Non-Banking Financial Co.","TRENT":"Retail",
     }
 
+    async def _fetch_screener_in_fundamentals(self, ticker: str) -> dict:
+        """
+        Scrape Screener.in for Indian stock fundamentals.
+        Free, no API key.
+        """
+        import re
+        from bs4 import BeautifulSoup
+
+        urls = [
+            f"https://www.screener.in/company/{ticker}/consolidated/",
+            f"https://www.screener.in/company/{ticker}/",
+        ]
+
+        for url in urls:
+            try:
+                resp = await self.client.get(url, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html",
+                })
+                if resp.status_code != 200:
+                    continue
+
+                soup = BeautifulSoup(resp.text, "lxml")
+
+                def _find_ratio(label: str) -> float | None:
+                    for li in soup.select("ul.company-ratios li"):
+                        name_el = li.select_one(".name")
+                        val_el  = li.select_one(".value")
+                        if name_el and val_el and label.lower() in name_el.get_text().lower():
+                            txt = re.sub(r"[^\d.\-]", "", val_el.get_text())
+                            try:
+                                return float(txt)
+                            except ValueError:
+                                return None
+                    return None
+
+                result = {
+                    "pe_ratio":        _find_ratio("P/E"),
+                    "pb_ratio":        _find_ratio("P/B"),
+                    "ev_ebitda":       _find_ratio("EV / EBITDA"),
+                    "ps_ratio":        _find_ratio("Price to Sales"),
+                    "roe":             _find_ratio("ROE"),
+                    "roce":            _find_ratio("ROCE"),
+                    "net_margin":      _find_ratio("Net Profit Margin"),
+                    "operating_margin":_find_ratio("OPM"),
+                    "current_ratio":   _find_ratio("Current Ratio"),
+                    "debt_equity":     _find_ratio("Debt to equity"),
+                    "revenue_growth":  _find_ratio("Sales Growth"),
+                    "dividend_yield":  _find_ratio("Dividend Yield"),
+                    "book_value":      _find_ratio("Book Value"),
+                    "face_value":      _find_ratio("Face Value"),
+                }
+
+                result = {k: v for k, v in result.items() if v is not None}
+                if result.get("pe_ratio") is not None or result.get("roe") is not None:
+                    logger.info(f"Screener.in: found {len(result)} fields for {ticker}")
+                    return result
+
+            except Exception as e:
+                logger.warning(f"Screener.in error for {ticker}: {e}")
+
+        return {}
+
+    async def _fetch_nse_fundamentals(self, ticker: str) -> dict:
+        """
+        NSE India public API — fetches metadata/industry details.
+        """
+        try:
+            from services.fyers_client import nse_client
+            q = await nse_client.get_quote(ticker)
+            if q:
+                # Fyers client / nse_client doesn't give deep fundamentals, but let's try calling NSE directly
+                pass
+        except Exception:
+            pass
+        return {}
+
     async def get_fundamentals(self, ticker: str) -> dict:
         t = ticker.upper()
         cache_key = f"fund_{t}"
@@ -375,7 +497,7 @@ class DataService:
         if cache_key in fundamentals_cache:
             return fundamentals_cache[cache_key]
 
-        # 2. Redis cache (fast fail: 2s connect timeout)
+        # 2. Redis cache
         try:
             r = await _get_redis()
             if r:
@@ -388,41 +510,43 @@ class DataService:
         except Exception:
             pass
 
-        # 3. Screener.in (free, no rate limit) — may be slow
-        data = None
-        try:
-            from services.screener_service import screener_service as _ss
-            d = await _ss.get_fundamentals(t)
-            if d and (d.get("pe_ratio") or d.get("roe")):
-                data = d
-                data["sector"] = self._SECTOR_MAP.get(t) or d.get("sector")
-                data["industry"] = self._INDUSTRY_MAP.get(t) or d.get("industry")
-        except Exception as e:
-            logger.warning(f"Screener.in failed for {t}: {e}")
+        # 3. Screener.in primary for Indian fundamentals
+        data = await self._fetch_screener_in_fundamentals(t)
 
         # 4. yfinance (with retry)
-        if not data:
+        if not data or not data.get("pe_ratio") or not data.get("roe"):
             try:
-                data = await self._fetch_yfinance_fundamentals(t)
-                if data:
-                    data["sector"] = self._SECTOR_MAP.get(t)
-                    data["industry"] = self._INDUSTRY_MAP.get(t)
+                yf_data = await self._fetch_yfinance_fundamentals(t)
+                if yf_data:
+                    data = {**data, **yf_data}
             except Exception:
                 pass
 
         # 5. Seed data fallback (reliable, deterministic)
-        if not data:
+        if not data or not data.get("pe_ratio"):
             try:
                 import services.seed_data as _sd
-                data = _sd.get_fundamentals(t)
-                if data:
-                    data["sector"] = self._SECTOR_MAP.get(t) or data.get("sector")
-                    data["industry"] = self._INDUSTRY_MAP.get(t) or data.get("industry")
-                    data["source"] = "seed"
+                seed = _sd.get_fundamentals(t)
+                if seed:
+                    data = {**seed, **data}
             except Exception:
                 pass
 
         if data:
+            data["sector"] = self._SECTOR_MAP.get(t) or data.get("sector") or "Diversified"
+            data["industry"] = self._INDUSTRY_MAP.get(t) or data.get("industry") or "General"
+            
+            # Ensure all expected keys exist (default to None)
+            expected_keys = [
+                "pe_ratio", "pb_ratio", "ev_ebitda", "ps_ratio", "peg_ratio",
+                "roe", "roce", "roa", "net_margin", "operating_margin",
+                "current_ratio", "quick_ratio", "debt_equity", "interest_coverage",
+                "revenue_growth", "dividend_yield", "market_cap", "book_value", "face_value",
+                "sector", "industry", "exchange",
+            ]
+            for key in expected_keys:
+                data.setdefault(key, None)
+
             fundamentals_cache[cache_key] = data
             await self._redis_set(cache_key, data, 86400)
 

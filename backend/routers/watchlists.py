@@ -84,3 +84,67 @@ async def delete_watchlist(watchlist_id: int, db: AsyncSession = Depends(get_db)
     await db.delete(watchlist)
     await db.commit()
     return {"deleted": True}
+
+
+@router.get("/{watchlist_id}/performance")
+async def get_watchlist_performance(
+    watchlist_id: int,
+    benchmark: str = "NIFTY50",
+    period: str = "1y",
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get watchlist performance vs benchmark, equal weighted index of tickers.
+    """
+    res = await db.execute(select(Watchlist).where(Watchlist.id == watchlist_id))
+    watchlist = res.scalar_one_or_none()
+    if not watchlist:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+
+    tickers = watchlist.tickers or []
+    if not tickers:
+        return {"performance": [], "benchmark": benchmark}
+
+    import pandas as pd
+    history_dfs = {}
+    for t in tickers:
+        df = await data_service.get_price_history(t, period=period)
+        if not df.empty:
+            df.columns = [c.lower() for c in df.columns]
+            history_dfs[t] = df["close"]
+
+    if not history_dfs:
+        return {"performance": [], "benchmark": benchmark}
+
+    combined_df = pd.DataFrame(history_dfs).ffill().bfill()
+    watchlist_growth = combined_df.mean(axis=1)
+    if not watchlist_growth.empty:
+        watchlist_growth = (watchlist_growth / watchlist_growth.iloc[0]) * 100
+
+    bench_ticker = "^NSEI" if benchmark.upper() == "NIFTY50" else benchmark
+    bench_df = await data_service.get_price_history(bench_ticker, period=period)
+    if bench_df.empty:
+        bench_df = await data_service.get_price_history("NIFTY50", period=period)
+
+    if not bench_df.empty:
+        bench_df.columns = [c.lower() for c in bench_df.columns]
+        bench_growth = bench_df["close"]
+        bench_growth = (bench_growth / bench_growth.iloc[0]) * 100
+    else:
+        bench_growth = pd.Series(100.0, index=watchlist_growth.index)
+
+    performance_data = []
+    for idx in watchlist_growth.index:
+        date_str = idx.strftime("%Y-%m-%d")
+        wl_val = float(watchlist_growth.loc[idx])
+        bench_val = float(bench_growth.loc[idx]) if idx in bench_growth.index else 100.0
+        performance_data.append({
+            "date": date_str,
+            "watchlist": round(wl_val, 2),
+            "benchmark": round(bench_val, 2),
+        })
+
+    return {
+        "performance": performance_data,
+        "benchmark": benchmark,
+    }

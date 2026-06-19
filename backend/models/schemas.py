@@ -22,6 +22,32 @@ class StockPrice(BaseModel):
     adj_close: float
     volume: int
 
+class Fundamentals(BaseModel):
+    ticker: str
+    pe_ratio: Optional[float] = None
+    pb_ratio: Optional[float] = None
+    ev_ebitda: Optional[float] = None
+    ps_ratio: Optional[float] = None
+    peg_ratio: Optional[float] = None
+    roe: Optional[float] = None
+    roce: Optional[float] = None
+    roa: Optional[float] = None
+    net_margin: Optional[float] = None
+    operating_margin: Optional[float] = None
+    gross_margin: Optional[float] = None
+    current_ratio: Optional[float] = None
+    quick_ratio: Optional[float] = None
+    debt_equity: Optional[float] = None
+    interest_coverage: Optional[float] = None
+    revenue_growth: Optional[float] = None
+    dividend_yield: Optional[float] = None
+    market_cap: Optional[float] = None
+    book_value: Optional[float] = None
+    face_value: Optional[float] = None
+    sector: Optional[str] = None
+    industry: Optional[str] = None
+    exchange: Optional[str] = "NSE"
+
 class StockQuote(BaseModel):
     ticker: str
     name: str
@@ -30,7 +56,12 @@ class StockQuote(BaseModel):
     change: float
     change_pct: float
     volume: int
-    market_cap: Optional[float]
+    market_cap: Optional[float] = None
+    prev_close: Optional[float] = None
+    day_high: Optional[float] = None
+    day_low: Optional[float] = None
+    fifty_two_week_high: Optional[float] = None
+    fifty_two_week_low: Optional[float] = None
 
 class StockDetail(StockBase):
     price: float
@@ -41,7 +72,7 @@ class StockDetail(StockBase):
     roe: Optional[float]
     revenue_growth: Optional[float]
     debt_equity: Optional[float]
-    factor_scores: Optional["FactorScoreOut"]
+    factor_scores: Optional["FactorScoreOut"] = None
 
 class FactorScoreOut(BaseModel):
     ticker: str

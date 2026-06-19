@@ -1,127 +1,196 @@
+// /frontend/app/page.tsx
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Home, TrendingUp, TrendingDown, Database, Activity, Shield, Target, Zap } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { STOCKS, T, fI, pct, genPrices } from '@/lib/stockData'
-
-const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
-const sc = v => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
-
-function Badge({ v }) {
-  const c = sc(v)
-  return <span style={{ background: `${c}22`, color: c, border: `1px solid ${c}44`, borderRadius: 4, padding: '2px 9px', fontSize: 12, fontFamily: T.mono, fontWeight: 700 }}>{v}</span>
-}
-
-function CT({ active, payload, label }: { active?: any; payload?: any; label?: any } = {}) {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={{ background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
-      <div style={{ color: T.muted, marginBottom: 4 }}>{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color || T.text, fontFamily: T.mono }}>
-          {p.name && <span style={{ color: T.sub }}>{p.name}: </span>}
-          {typeof p.value === 'number' ? p.value.toFixed(2) : p.value}
-        </div>
-      ))}
-    </div>
-  )
-}
+import { TrendingUp, TrendingDown, RefreshCw, Layers } from 'lucide-react'
+import { useMarketSummary, useTopGainersLosers, useSectorPerformance, useFactorSignals } from '@/lib/hooks'
+import PageShell from '@/components/layout/PageShell'
+import Card from '@/components/ui/Card'
+import { scoreColor } from '@/lib/stockData'
 
 export default function Dashboard() {
   const router = useRouter()
-  const indices = [
-    { label: 'NIFTY 50', val: 24857.2, chg: 0.89 },
-    { label: 'SENSEX', val: 81865.4, chg: 0.74 },
-    { label: 'BANK NIFTY', val: 53241.8, chg: 1.12 },
-    { label: 'INDIA VIX', val: 13.42, chg: -0.85 },
-  ]
-  const sorted = [...STOCKS].sort((a, b) => b.composite - a.composite)
-  const byChg = [...STOCKS].sort((a, b) => b.chg - a.chg)
-  const niftyPts = genPrices(24857.2, 999, 120).slice(-88)
+
+  // Real hooks querying backend APIs
+  const { data: indices, isLoading: indicesLoading, refetch: refetchIndices } = useMarketSummary()
+  const { data: movers, isLoading: moversLoading } = useTopGainersLosers()
+  const { data: sectorPerf, isLoading: sectorsLoading } = useSectorPerformance()
+  const { data: factorSignals, isLoading: factorsLoading } = useFactorSignals()
+
+  const handleStockClick = (ticker: string) => {
+    router.push(`/stocks/${ticker}`)
+  }
+
+  const isLoading = indicesLoading || moversLoading || sectorsLoading || factorsLoading
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <RefreshCw className="w-8 h-8 text-brand animate-spin" />
+        <span className="text-textSub text-sm">QuantAI is synchronizing live NSE/BSE feeds...</span>
+      </div>
+    )
+  }
+
+  // Handle API format: indices can be array or dict
+  const rawIndices = Array.isArray(indices) ? indices : []
 
   return (
-    <div style={{ padding: '26px 30px', maxWidth: 1200, fontFamily: T.sans }}>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Market Dashboard</div>
-        <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>
-          NSE · BSE · India Equities — {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </div>
+    <PageShell 
+      title="Quant Terminal" 
+      subtitle="Real-time multi-factor signals & market telemetry"
+      actions={
+        <button 
+          onClick={() => { refetchIndices() }}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-elevated hover:bg-border border border-border rounded-lg text-xs font-semibold text-textSub hover:text-textPrimary transition-all"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh Feed
+        </button>
+      }
+    >
+      {/* Index telemetry row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {rawIndices.map((idx: any) => {
+          const isPos = idx.change_pct >= 0
+          return (
+            <Card key={idx.name} padding="sm">
+              <div className="metric-label">{idx.name}</div>
+              <div className="metric-value mt-1.5 text-2xl font-mono">
+                {idx.last ? idx.last.toLocaleString('en-IN') : 'N/A'}
+              </div>
+              <div className={`flex items-center gap-1 font-mono text-xs font-semibold mt-1 ${isPos ? 'text-success' : 'text-danger'}`}>
+                {isPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {isPos ? '+' : ''}{(idx.change_pct ?? 0).toFixed(2)}%
+              </div>
+            </Card>
+          )
+        })}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
-        {indices.map(({ label, val, chg }) => (
-          <div key={label} style={card({ padding: '13px 16px' })}>
-            <div style={{ fontSize: 10, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 5 }}>{label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.mono, color: T.text }}>{val.toLocaleString('en-IN')}</div>
-            <div style={{ fontSize: 12, fontFamily: T.mono, color: chg >= 0 ? T.green : T.red, marginTop: 2 }}>{chg >= 0 ? '\u25B2' : '\u25BC'} {Math.abs(chg).toFixed(2)}%</div>
+      {/* Main Grid: Sector Allocation and Factors */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Factor signals card */}
+        <Card padding="md" className="col-span-2">
+          <Card.Header 
+            title="Composite Factor Rankings" 
+            subtitle="Top ranked constituents in the Nifty 500 universe" 
+          />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border/50 text-textMuted text-xs font-semibold uppercase">
+                  <th className="py-2.5">Ticker</th>
+                  <th className="py-2.5">Sector</th>
+                  <th className="py-2.5 text-right">Price</th>
+                  <th className="py-2.5 text-right">Change</th>
+                  <th className="py-2.5 text-right">Composite</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {((factorSignals as any)?.signals ?? []).slice(0, 7).map((stk: any) => {
+                  const isPos = stk.change_pct >= 0
+                  return (
+                    <tr 
+                      key={stk.ticker} 
+                      className="hover:bg-elevated/40 cursor-pointer transition-colors"
+                      onClick={() => handleStockClick(stk.ticker)}
+                    >
+                      <td className="py-3 font-mono font-bold text-brand">{stk.ticker}</td>
+                      <td className="py-3 text-textSub text-xs">{stk.sector}</td>
+                      <td className="py-3 text-right font-mono text-textPrimary">₹{stk.price?.toFixed(1)}</td>
+                      <td className={`py-3 text-right font-mono text-xs font-semibold ${isPos ? 'text-success' : 'text-danger'}`}>
+                        {isPos ? '+' : ''}{(stk.change_pct ?? 0).toFixed(2)}%
+                      </td>
+                      <td className="py-3 text-right">
+                        <span 
+                          className="badge text-xs"
+                          style={{
+                            backgroundColor: `${scoreColor(stk.composite_score ?? 60)}15`,
+                            color: scoreColor(stk.composite_score ?? 60),
+                          }}
+                        >
+                          {stk.composite_score ?? 60}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        ))}
+        </Card>
+
+        {/* Sector strength index */}
+        <Card padding="md">
+          <Card.Header title="Sector Strengths" subtitle="Daily change across key industry indices" />
+          <div className="space-y-3.5">
+            {Object.entries(sectorPerf || {}).slice(0, 6).map(([sec, val]: any) => {
+              const isPos = val['1d'] >= 0
+              return (
+                <div key={sec} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-3.5 h-3.5 text-brand" />
+                    <span className="text-textSub font-medium">{sec}</span>
+                  </div>
+                  <span className={`font-mono text-xs font-semibold ${isPos ? 'text-success' : 'text-danger'}`}>
+                    {isPos ? '+' : ''}{(val['1d'] ?? 0).toFixed(2)}%
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 14 }}>
-        <div style={card({ padding: '16px 18px' })}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 14 }}>Nifty 50 — 90 Days</div>
-          <ResponsiveContainer width="100%" height={195}>
-            <AreaChart data={niftyPts} margin={{ top: 4, right: 4, bottom: 0, left: 44 }}>
-              <defs>
-                <linearGradient id="g0" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={T.blue} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={T.blue} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="d" tick={{ fontSize: 10, fill: T.muted }} tickLine={false} axisLine={false} interval={15} />
-              <YAxis tick={{ fontSize: 10, fill: T.muted, fontFamily: T.mono }} tickLine={false} axisLine={false} domain={['auto', 'auto']} tickFormatter={v => v.toLocaleString('en-IN')} />
-              <Tooltip content={<CT />} />
-              <Area type="monotone" dataKey="p" stroke={T.blue} strokeWidth={2} fill="url(#g0)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div style={card({ padding: '16px 18px' })}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 12 }}>Top Factor Signals</div>
-          {sorted.slice(0, 6).map(stk => (
-            <div
-              key={stk.ticker}
-              onClick={() => router.push(`/stocks/${stk.ticker}`)}
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${T.b}`, cursor: 'pointer' }}
-            >
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: T.text, fontFamily: T.mono }}>{stk.ticker}</div>
-                <div style={{ fontSize: 10, color: T.muted }}>{stk.sector}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <Badge v={stk.composite} />
-                <div style={{ fontSize: 10, fontFamily: T.mono, color: stk.chg >= 0 ? T.green : T.red, marginTop: 2 }}>{pct(stk.chg)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {[{ title: 'Top Gainers', data: byChg.slice(0, 5) }, { title: 'Top Losers', data: [...byChg].reverse().slice(0, 5) }].map(({ title, data }) => (
-          <div key={title} style={card({ padding: '15px 18px' })}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 10 }}>{title}</div>
-            {data.map(stk => (
-              <div
+      {/* Gainers and Losers tables */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Gainers */}
+        <Card padding="md">
+          <Card.Header title="Top Movers — Gainers" icon={TrendingUp} />
+          <div className="space-y-1">
+            {(movers?.gainers ?? []).map((stk: any) => (
+              <div 
                 key={stk.ticker}
-                onClick={() => router.push(`/stocks/${stk.ticker}`)}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: `1px solid ${T.b}`, cursor: 'pointer' }}
+                onClick={() => handleStockClick(stk.ticker)}
+                className="flex justify-between items-center py-2.5 px-2 hover:bg-elevated/50 rounded-lg cursor-pointer transition-colors border-b border-border/30 last:border-0"
               >
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: T.text, fontFamily: T.mono }}>{stk.ticker}</div>
-                  <div style={{ fontSize: 10, color: T.muted }}>{stk.name}</div>
+                  <div className="font-mono font-bold text-success text-sm">{stk.ticker}</div>
+                  <div className="text-[11px] text-textMuted">{stk.name}</div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 12, fontFamily: T.mono, color: T.text }}>₹{stk.price.toLocaleString('en-IN')}</div>
-                  <div style={{ fontSize: 11, fontFamily: T.mono, color: stk.chg >= 0 ? T.green : T.red }}>{pct(stk.chg)}</div>
+                <div className="text-right">
+                  <div className="font-mono text-textPrimary text-sm">₹{stk.price?.toFixed(1)}</div>
+                  <div className="font-mono text-success text-xs font-semibold">+{stk.change_pct?.toFixed(2)}%</div>
                 </div>
               </div>
             ))}
           </div>
-        ))}
+        </Card>
+
+        {/* Losers */}
+        <Card padding="md">
+          <Card.Header title="Top Movers — Losers" icon={TrendingDown} />
+          <div className="space-y-1">
+            {(movers?.losers ?? []).map((stk: any) => (
+              <div 
+                key={stk.ticker}
+                onClick={() => handleStockClick(stk.ticker)}
+                className="flex justify-between items-center py-2.5 px-2 hover:bg-elevated/50 rounded-lg cursor-pointer transition-colors border-b border-border/30 last:border-0"
+              >
+                <div>
+                  <div className="font-mono font-bold text-danger text-sm">{stk.ticker}</div>
+                  <div className="text-[11px] text-textMuted">{stk.name}</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono text-textPrimary text-sm">₹{stk.price?.toFixed(1)}</div>
+                  <div className="font-mono text-danger text-xs font-semibold">{stk.change_pct?.toFixed(2)}%</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       </div>
-    </div>
+    </PageShell>
   )
 }
