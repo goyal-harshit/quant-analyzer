@@ -1,0 +1,137 @@
+services:
+  # ── PostgreSQL with TimescaleDB extension (open-source, free) ──
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: quantai_postgres
+    environment:
+      POSTGRES_USER: quantai
+      POSTGRES_PASSWORD: quantai_pass
+      POSTGRES_DB: quantai_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (open-source, free) ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: quantai_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Ollama — free, open-source, self-hosted LLM server ──────────
+  # Serves open-weight models (Llama 3.2, Mistral, Qwen2.5, Phi-3...)
+  # entirely on your own CPU/GPU. No API key, no billing, ever.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: quantai_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Uncomment below if you have an NVIDIA GPU available for faster inference:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ── FastAPI Backend ───────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+    container_name: quantai_backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://quantai:quantai_pass@postgres:5432/quantai_db
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: llama3.2
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── Celery Worker (background data ingestion, open-source) ──────
+  celery_worker:
+    build:
+      context: ./backend
+    container_name: quantai_celery
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://quantai:quantai_pass@postgres:5432/quantai_db
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: llama3.2
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    command: sh -c "PYTHONPATH=/app celery -A services.celery_app worker --loglevel=info"
+
+  # ── Celery Beat (scheduler for background tasks, open-source) ────
+  celery_beat:
+    build:
+      context: ./backend
+    container_name: quantai_beat
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://quantai:quantai_pass@postgres:5432/quantai_db
+      REDIS_URL: redis://redis:6379/0
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: llama3.2
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    command: sh -c "PYTHONPATH=/app celery -A services.celery_app beat --loglevel=info"
+
+  # ── Next.js Frontend (open-source) ───────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+    container_name: quantai_frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  # ── One-shot helper: pulls the default Ollama model automatically ─
+  ollama_model_init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    entrypoint: >
+      sh -c "sleep 5 && OLLAMA_HOST=http://ollama:11434 ollama pull llama3.2"
+    restart: "no"
+
+volumes:
+  postgres_data:
+  ollama_data:

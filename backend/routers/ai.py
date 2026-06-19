@@ -1,0 +1,203 @@
+"""AI Router — LLM-powered research endpoints"""
+
+import asyncio
+from fastapi import APIRouter, HTTPException
+from datetime import datetime, timezone
+
+from models.schemas import (
+    ChatRequest, ChatResponse, AIReportRequest, AIReportResponse,
+    EarningsSummaryRequest,
+)
+from services.ai_service import ai_service, SYSTEM_PROMPT_ANALYST, _STOCKS, buildOfflineReport, buildOfflineChatReply
+from services.data_service import data_service
+from services.fast_data import compute_quant_factors
+
+router = APIRouter()
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    Conversational research assistant.
+    Maintains context across a message thread; optionally biased toward
+    a specific stock the user is currently viewing.
+    """
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    result = await ai_service.chat(messages, context_ticker=request.context_ticker)
+    return ChatResponse(**result)
+
+
+@router.post("/report/{ticker}", response_model=AIReportResponse)
+async def generate_report(ticker: str, request: AIReportRequest = None):
+    """
+    Generate a full AI research report for a stock combining fundamentals,
+    factor scores, and qualitative analysis.
+    """
+    ticker = ticker.upper()
+    fundamentals = await data_service.get_fundamentals(ticker)
+    quote = await data_service.get_quote(ticker)
+
+    if not fundamentals:
+        raise HTTPException(status_code=404, detail=f"No data available for {ticker}")
+
+    stock_data = {**fundamentals, **quote, "ticker": ticker}
+    report_type = request.report_type if request else "full"
+
+    content = await ai_service.generate_stock_report(stock_data, report_type)
+
+    return AIReportResponse(
+        ticker=ticker,
+        report_type=report_type,
+        content=content,
+        model="ollama-llama3.2",
+        generated_at=datetime.now(timezone.utc),
+    )
+
+
+@router.get("/insight/{ticker}")
+async def get_stock_insight(ticker: str):
+    """
+    Get real stock data + quant factors + AI analysis for ANY ticker.
+    Uses direct Yahoo Finance API calls (fast, reliable from Docker).
+    """
+    ticker = ticker.upper().replace(".NS", "").replace(".BO", "")
+
+    # Single cached call per data type — all parallel, fast fallback
+    _f, _q, _prices = await asyncio.gather(
+        data_service.get_fundamentals(ticker),
+        data_service.get_quote(ticker),
+        data_service.get_price_history(ticker, period="1y"),
+        return_exceptions=True,
+    )
+
+    fundamentals = _f if not isinstance(_f, Exception) else {}
+    quote = _q if not isinstance(_q, Exception) else {}
+    prices_df = _prices if not isinstance(_prices, Exception) else None
+
+    year_change_pct = None
+    if prices_df is not None and not prices_df.empty and len(prices_df) > 1:
+        current = prices_df["close"].iloc[-1]
+        year_ago = prices_df["close"].iloc[0]
+        if year_ago and year_ago > 0:
+            year_change_pct = round(((current - year_ago) / year_ago) * 100, 2)
+        fifty_two_week_high = round(float(prices_df["high"].max()), 2)
+        fifty_two_week_low = round(float(prices_df["low"].min()), 2)
+        if quote:
+            quote["year_change_pct"] = year_change_pct
+            quote["fifty_two_week_high"] = fifty_two_week_high
+            quote["fifty_two_week_low"] = fifty_two_week_low
+
+    # Compute quant factors from real data (works even without fundamentals)
+    factors = {}
+    if prices_df is not None and not prices_df.empty:
+        factors = compute_quant_factors(prices_df, fundamentals or {})
+
+    # Build compact data summary for Ollama
+    price = quote.get("price") if quote else None
+    year_hi = quote.get("fifty_two_week_high") if quote else None
+    year_lo = quote.get("fifty_two_week_low") if quote else None
+    chg = quote.get("year_change_pct") if quote else None
+
+    data_str = f"Price: ₹{price}" if price else ""
+    if year_hi: data_str += f", 52W High: ₹{year_hi}"
+    if year_lo: data_str += f", 52W Low: ₹{year_lo}"
+    if chg: data_str += f", 1Y Change: {chg}%"
+
+    if factors:
+        score = factors.get("composite_score")
+        mom = factors.get("momentum_score")
+        rsi = factors.get("rsi_14")
+        vol = factors.get("volatility_60d")
+        parts = []
+        if score is not None: parts.append(f"Composite={score}")
+        if mom is not None: parts.append(f"Momentum={mom}")
+        if rsi is not None: parts.append(f"RSI={rsi}")
+        if vol is not None: parts.append(f"Vol60d={vol}%")
+        if parts: data_str += "\nScores: " + ", ".join(parts)
+
+    prompt = f"""Analyze {ticker} ({quote.get('name', ticker) if quote else ticker}).
+Data: {data_str}
+
+Give exactly 4 short bullet points (1 line each):
+- Valuation: is it cheap/fair/expensive?
+- Momentum: trend direction and strength
+- Risk: key concern from the data
+- Verdict: buy/hold/sell with 1 reason
+
+Be brief. Use numbers. No headers."""
+
+    analysis = "Analysis unavailable"
+    try:
+        result = await asyncio.wait_for(
+            ai_service._generate(SYSTEM_PROMPT_ANALYST, [{"role": "user", "content": prompt}], max_tokens=300),
+            timeout=5.0,
+        )
+        analysis = result.get("content", analysis)
+    except Exception:
+        stock = next((s for s in _STOCKS if s["ticker"] == ticker), None)
+        if stock:
+            analysis = buildOfflineReport(stock)
+        else:
+            comp = factors.get("composite_score") or 0
+            price = quote.get("price") if quote else 0
+            pe = (fundamentals or {}).get("pe_ratio") or 0
+            roe = (fundamentals or {}).get("roe") or 0
+            sector = (fundamentals or {}).get("sector", "Diversified")
+            analysis = (
+                f"**Quick Snapshot**\n"
+                f"{ticker} trades at ₹{price:,.0f} with P/E {pe:.1f}x and ROE {roe:.1f}%. "
+                f"Composite score {comp}/100.\n\n"
+                f"⚠️ Offline engine. For full LLM analysis, run Ollama locally."
+            )
+
+    return {
+        "ticker": ticker,
+        "name": quote.get("name", ticker) if quote else ticker,
+        "quote": quote if quote else None,
+        "fundamentals": fundamentals if fundamentals else None,
+        "factors": factors if factors else None,
+        "analysis": analysis,
+        "model": "ollama-llama3.2",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.post("/earnings-summary")
+async def summarise_earnings(request: EarningsSummaryRequest):
+    """
+    Summarise earnings release for a ticker.
+    In production: fetch raw filing text from NSE/BSE corporate
+    announcements or earnings call transcript providers.
+    """
+    # Placeholder: in production, fetch actual filing text
+    placeholder_text = f"[Earnings filing text for {request.ticker}, period {request.period} would be fetched from NSE/BSE corporate announcements API here]"
+
+    summary = await ai_service.summarise_earnings(request.ticker, placeholder_text)
+    return {
+        "ticker": request.ticker,
+        "period": request.period,
+        "summary": summary,
+    }
+
+
+@router.post("/thesis/{ticker}")
+async def generate_thesis(ticker: str):
+    """Generate a structured bull/bear investment thesis."""
+    ticker = ticker.upper()
+    fundamentals = await data_service.get_fundamentals(ticker)
+    quote = await data_service.get_quote(ticker)
+
+    if not fundamentals:
+        raise HTTPException(status_code=404, detail=f"No data available for {ticker}")
+
+    stock_data = {**fundamentals, **quote, "ticker": ticker}
+    thesis = await ai_service.generate_investment_thesis(stock_data)
+
+    return {"ticker": ticker, "thesis": thesis}
+
+
+@router.post("/portfolio-risk-narrative")
+async def portfolio_risk_narrative(portfolio_data: dict):
+    """Generate plain-language explanation of portfolio risk metrics."""
+    narrative = await ai_service.analyse_portfolio_risk(portfolio_data)
+    return {"narrative": narrative}
