@@ -12,11 +12,53 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from routers import stocks, screener, portfolio, backtest, macro, ai, dashboard, news, earnings, quant_lab, strategy_builder, watchlists, alerts, auth, insight
+# ── Domain modules (PROJECT_PLAN §4: each domain under modules/<name>/) ──
+from modules.stocks import router as stocks
+from modules.screener import router as screener
+from modules.portfolio import router as portfolio
+from modules.backtest import router as backtest
+from modules.macro import router as macro
+from modules.ai import router as ai
+from modules.dashboard import router as dashboard
+from modules.news import router as news
+from modules.earnings import router as earnings
+from modules.quant_lab import router as quant_lab
+from modules.strategy_builder import router as strategy_builder
+from modules.watchlists import router as watchlists
+from modules.alerts import router as alerts
+from modules.auth import router as auth
+from modules.insight import router as insight
+from modules.mutual_funds import router as mutual_funds_router
+from modules.ipo import router as ipo_router
+# Import module models so init_db()'s create_all registers their tables.
+from modules.mutual_funds import models as _mf_models  # noqa: F401
+from modules.ipo import models as _ipo_models  # noqa: F401
 from models.database import init_db, get_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+async def _warm_universe():
+    """Background warm-up: pre-cache universe fundamentals + factor scores so the
+    screener and dashboard are fast on first hit (avoids 50 cold screener.in scrapes
+    on the request path). Guarded by a Redis flag so frequent dev reloads don't re-run it."""
+    try:
+        from services.data_service import data_service, NIFTY_50_TICKERS, _gather_limited, _get_redis
+        r = await _get_redis()
+        if r:
+            try:
+                if await r.get("warm:universe"):
+                    return
+                await r.setex("warm:universe", 600, "1")
+            except Exception:
+                pass
+        logger.info("🔥 Warming universe cache (%d tickers)…", len(NIFTY_50_TICKERS))
+        await _gather_limited([data_service.get_fundamentals(t) for t in NIFTY_50_TICKERS], limit=10)
+        await data_service.get_universe_overview()
+        logger.info("✅ Universe cache warmed")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Universe warm-up failed: {e}")
 
 
 @asynccontextmanager
@@ -38,6 +80,8 @@ async def lifespan(app: FastAPI):
             logger.info("ℹ️  Redis unavailable — running without cache")
     except Exception:
         logger.info("ℹ️  Redis connection failed — running without cache")
+    # Kick off universe cache warm-up in the background (non-blocking).
+    asyncio.create_task(_warm_universe())
     yield
     logger.info("👋 QuantAI Backend shutting down")
 
@@ -55,6 +99,9 @@ origins = [o.strip() for o in cors_origins_str.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    # Personal/local app: accept the frontend on any localhost/127.0.0.1 port
+    # (Docker uses :3000, but a local `next dev` or preview may use any port).
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,6 +132,8 @@ app.include_router(watchlists.router, prefix="/api/v1/watchlists", tags=["Watchl
 app.include_router(alerts.router,    prefix="/api/v1/alerts",    tags=["Alerts"])
 app.include_router(auth.router,      prefix="/api/v1/auth",      tags=["Auth"])
 app.include_router(insight.router,   prefix="/api/v1/insight",   tags=["Insight"])
+app.include_router(mutual_funds_router.router, prefix="/api/v1/mf",  tags=["Mutual Funds"])
+app.include_router(ipo_router.router,          prefix="/api/v1/ipo", tags=["IPO"])
 
 
 @app.get("/")

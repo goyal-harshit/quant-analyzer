@@ -3,12 +3,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Filter, Target, RefreshCw, Globe, MessageSquare, Zap, Cpu, LogOut, User, Menu, Star } from 'lucide-react'
+import { Home, Filter, Target, RefreshCw, Globe, MessageSquare, Zap, Cpu, LogOut, User, Menu, Star, PiggyBank, Rocket } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 
 const NAV = [
   { id: 'dashboard', icon: Home, label: 'Dashboard', href: '/dashboard' },
   { id: 'screener', icon: Filter, label: 'Screener', href: '/screener' },
+  { id: 'mutual-funds', icon: PiggyBank, label: 'Mutual Funds', href: '/mutual-funds' },
+  { id: 'ipo', icon: Rocket, label: 'IPO Tracker', href: '/ipo' },
   { id: 'portfolio', icon: Target, label: 'Portfolio', href: '/portfolio' },
   { id: 'watchlists', icon: Star, label: 'Watchlists', href: '/watchlists' },
   { id: 'backtest', icon: RefreshCw, label: 'Backtester', href: '/backtest' },

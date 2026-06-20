@@ -163,17 +163,16 @@ def precompute_warm_cache_task():
         async def _warm(t):
             async with sem:
                 try:
+                    # Seed quotes only (short TTL). Do NOT write fund_ seed — it would
+                    # mask the live fundamentals served by the API for 24h.
                     q = get_seed_quote(t)
                     if q:
-                        await cache.set(f"q_{t}", json.dumps(q), 300)
-                    f = get_seed_fundamentals(t)
-                    if f:
-                        await cache.set(f"fund_{t}", json.dumps(f), 86400)
+                        await cache.set(f"q_{t}", json.dumps(q), 120)
                 except Exception:
                     pass
         tasks = [_warm(t) for t in DEFAULT_TICKERS]
         await asyncio.gather(*tasks, return_exceptions=True)
-        logger.info(f"Redis warm with seed data for {len(DEFAULT_TICKERS)} tickers")
+        logger.info(f"Redis warm with seed quotes for {len(DEFAULT_TICKERS)} tickers")
 
     run_async(_run())
 
@@ -191,17 +190,31 @@ def refresh_daily_seed_cache_task():
         async def _refresh(t):
             async with sem:
                 try:
+                    # Quotes only, short TTL. Never write fund_ seed (masks live data).
                     q = get_seed_quote(t)
                     if q:
-                        await cache.set(f"q_{t}", json.dumps(q), 300)
-                    f = get_seed_fundamentals(t)
-                    if f:
-                        await cache.set(f"fund_{t}", json.dumps(f), 86400)
+                        await cache.set(f"q_{t}", json.dumps(q), 120)
                 except Exception as e:
                     logger.warning(f"Seed refresh failed for {t}: {e}")
         tasks = [_refresh(t) for t in list(DEFAULT_TICKERS)[:50]]
         await asyncio.gather(*tasks, return_exceptions=True)
-        logger.info("Daily seed cache refreshed for 50 tickers")
+        logger.info("Daily seed quote cache refreshed for 50 tickers")
+
+    run_async(_run())
+
+
+@celery_app.task
+def warm_live_universe_task():
+    """Warm Redis with LIVE fundamentals + factor scores for the liquid NIFTY-50
+    universe (screener.in + Yahoo v8 chart). No seed writes, no yfinance."""
+    logger.info("Celery: warming LIVE universe cache (NIFTY 50)...")
+
+    async def _run():
+        from services.data_service import data_service, NIFTY_50_TICKERS, _gather_limited
+        # Low concurrency — screener_service has a global rate gate; keep it gentle.
+        await _gather_limited([data_service.get_fundamentals(t) for t in NIFTY_50_TICKERS], limit=3)
+        await data_service.get_universe_overview(refresh=True)
+        logger.info("Celery: live universe warm complete")
 
     run_async(_run())
 

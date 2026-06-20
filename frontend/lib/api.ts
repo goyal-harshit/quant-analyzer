@@ -182,9 +182,9 @@ export const backtestApi = {
 
 // ── MACRO ───────────────────────────────────────────────────────
 export const macroApi = {
-  getDashboard: () => client.get("/macro").then((r) => r.data),
+  getDashboard: (refresh = false) => client.get("/macro", { params: { refresh } }).then((r) => r.data),
   getRegime: () => client.get("/macro/regime").then((r) => r.data),
-  getIndicators: () => client.get("/macro").then((r) => r.data),
+  getIndicators: (refresh = false) => client.get("/macro", { params: { refresh } }).then((r) => r.data),
 };
 
 // ── AI ──────────────────────────────────────────────────────────
@@ -323,6 +323,76 @@ export const authApi = {
 export const insightApi = {
   getStockInsight: (ticker: string, includeAi = false, refresh = false) =>
     client.get(`/insight/${ticker}`, { params: { include_ai: includeAi, refresh } }).then((r) => r.data),
+};
+
+// ── MUTUAL FUNDS ──────────────────────────────────────────────────
+export interface MFSearchResult {
+  scheme_code: number;
+  scheme_name: string;
+  fund_house?: string | null;
+  category?: string | null;
+}
+
+export const mfApi = {
+  search: (q: string) =>
+    client.get<{ query: string; count: number; results: MFSearchResult[] }>("/mf/search", { params: { q } })
+      .then((r) => r.data),
+
+  popular: () =>
+    client.get<{ results: MFSearchResult[] }>("/mf/popular").then((r) => r.data),
+
+  getScheme: (code: number, period = "3y") =>
+    client.get(`/mf/${code}`, { params: { period } }).then((r) => r.data),
+
+  getReturns: (code: number) =>
+    client.get(`/mf/${code}/returns`).then((r) => r.data),
+
+  getRisk: (code: number) =>
+    client.get(`/mf/${code}/risk`).then((r) => r.data),
+
+  sipCalculator: (body: { monthly_amount: number; years: number; expected_return?: number; annual_step_up?: number }) =>
+    client.post("/mf/sip-calculator", body).then((r) => r.data),
+
+  compare: (scheme_codes: number[]) =>
+    client.post("/mf/compare", { scheme_codes }).then((r) => r.data),
+};
+
+// ── IPO ───────────────────────────────────────────────────────────
+export interface IPOItem {
+  id: string;
+  company_name: string;
+  symbol?: string | null;
+  exchange: string;
+  ipo_type: string;
+  issue_size_cr?: number | null;
+  price_band_low?: number | null;
+  price_band_high?: number | null;
+  lot_size?: number | null;
+  open_date?: string | null;
+  close_date?: string | null;
+  listing_date?: string | null;
+  listing_price?: number | null;
+  current_price?: number | null;
+  listing_gain_pct?: number | null;
+  gmp?: number | null;
+  gmp_pct?: number | null;
+  subscription_times?: number | null;
+  status: string;
+}
+
+export const ipoApi = {
+  all: (refresh = false) => client.get<{ ipos: IPOItem[] }>("/ipo", { params: { refresh } }).then((r) => r.data),
+  upcoming: () => client.get<{ ipos: IPOItem[] }>("/ipo/upcoming").then((r) => r.data),
+  open: () => client.get<{ ipos: IPOItem[] }>("/ipo/open").then((r) => r.data),
+  listed: (days = 60) => client.get<{ ipos: IPOItem[] }>("/ipo/listed", { params: { days } }).then((r) => r.data),
+  sme: () => client.get<{ ipos: IPOItem[] }>("/ipo/sme").then((r) => r.data),
+  calendar: (month?: string) => client.get("/ipo/calendar", { params: { month } }).then((r) => r.data),
+};
+
+// MF refresh helpers
+export const mfRefresh = {
+  scheme: (code: number, period = "3y") =>
+    client.get(`/mf/${code}`, { params: { period, refresh: true } }).then((r) => r.data),
 };
 
 export default client;

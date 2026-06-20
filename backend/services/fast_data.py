@@ -200,90 +200,32 @@ class FastDataService:
             logger.warning(f"Error fetching Yahoo quote summary for {ticker}: {e}")
             return {}
 
-    # ── FUNDAMENTALS (Screener.in primary, yfinance fallback) ─────
+    # ── FUNDAMENTALS (Screener.in primary, Yahoo quoteSummary fallback) ─────
     async def get_fundamentals(self, ticker: str) -> dict:
         """
-        Fetch fundamental data — Screener.in first (free, reliable),
-        then Yahoo quoteSummary (free, direct), and finally yfinance info.
+        Fetch fundamental data — Screener.in first (free, reliable, real), then
+        Yahoo quoteSummary (free, direct). The yfinance library fallback was
+        removed: from this environment Yahoo's library endpoints return 429 and
+        yfinance retries with backoff, which 429-storms and stalls batch screens.
         """
         # Try Screener.in first (free, no rate limiting)
         try:
             from services.screener_service import screener_service
             data = await screener_service.get_fundamentals(ticker)
             if data and (data.get("pe_ratio") or data.get("roe")):
-                logger.info(f"Screener.in fundamentals OK for {ticker}")
                 return data
         except Exception as e:
             logger.warning(f"Screener.in failed for {ticker}: {e}")
 
-        # Try direct Yahoo quoteSummary endpoint (free, direct, no rate limiting)
+        # Try direct Yahoo quoteSummary endpoint (free, direct)
         try:
             data = await self.get_yahoo_quote_summary(ticker)
             if data and (data.get("pe_ratio") or data.get("roe")):
-                logger.info(f"Yahoo quoteSummary fundamentals OK for {ticker}")
                 return data
         except Exception as e:
             logger.warning(f"Yahoo quoteSummary failed for {ticker}: {e}")
 
-        # Fallback: yfinance info (may be rate-limited)
-        try:
-            import yfinance as yf
-
-            loop = asyncio.get_event_loop()
-
-            def fetch():
-                t = yf.Ticker(f"{ticker}.NS")
-                try:
-                    info = t.info
-                    if info and "trailingPE" in info:
-                        return info
-                except Exception:
-                    pass
-                return {}
-
-            info = await loop.run_in_executor(None, fetch)
-
-            if not info or "trailingPE" not in info:
-                return {}
-
-            def _pct(val):
-                if val is not None:
-                    try:
-                        return float(val) * 100
-                    except (ValueError, TypeError):
-                        return None
-                return None
-
-            return {
-                "ticker": ticker,
-                "sector": info.get("sector"),
-                "industry": info.get("industry"),
-                "pe_ratio": info.get("trailingPE"),
-                "forward_pe": info.get("forwardPE"),
-                "pb_ratio": info.get("priceToBook"),
-                "ps_ratio": info.get("priceToSalesTrailing12Months"),
-                "ev_ebitda": info.get("enterpriseToEbitda"),
-                "peg_ratio": info.get("pegRatio"),
-                "roe": _pct(info.get("returnOnEquity")),
-                "roa": _pct(info.get("returnOnAssets")),
-                "gross_margin": _pct(info.get("grossMargins")),
-                "ebitda_margin": _pct(info.get("ebitdaMargins")),
-                "net_margin": _pct(info.get("profitMargins")),
-                "operating_margin": _pct(info.get("operatingMargins")),
-                "revenue_growth": _pct(info.get("revenueGrowth")),
-                "earnings_growth": _pct(info.get("earningsGrowth")),
-                "debt_equity": info.get("debtToEquity"),
-                "current_ratio": info.get("currentRatio"),
-                "free_cashflow": info.get("freeCashflow"),
-                "beta": info.get("beta"),
-                "dividend_yield": _pct(info.get("dividendYield")),
-                "market_cap": info.get("marketCap"),
-                "enterprise_value": info.get("enterpriseValue"),
-                "book_value": info.get("bookValue"),
-            }
-        except Exception as e:
-            logger.warning(f"yfinance fundamentals failed for {ticker}: {e}")
-            return {}
+        return {}
 
 
 # ── QUANT FACTOR COMPUTATION (single stock) ──────────────────────

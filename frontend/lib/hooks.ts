@@ -264,9 +264,58 @@ export function useStockInsight(ticker: string, includeAi = false, refreshSeed =
 }
 
 // ── MACRO HOOKS ───────────────────────────────────────────────────
-export function useMacroIndicators() {
+export function useMacroIndicators(refreshSeed = 0) {
   return useQuery({
-    queryKey: ['macro', 'indicators'],
-    queryFn: () => macroApi.getIndicators(),
+    queryKey: ['macro', 'indicators', refreshSeed],
+    queryFn: () => macroApi.getIndicators(refreshSeed > 0),
+  })
+}
+
+// ── MUTUAL FUND HOOKS ─────────────────────────────────────────────
+export function useMFSearch(query: string) {
+  return useQuery({
+    queryKey: ['mf', 'search', query],
+    queryFn: () => import('./api').then((m) => m.mfApi.search(query)),
+    enabled: query.trim().length > 1,
+  })
+}
+
+export function useMFPopular() {
+  return useQuery({
+    queryKey: ['mf', 'popular'],
+    queryFn: () => import('./api').then((m) => m.mfApi.popular()),
+  })
+}
+
+export function useMFScheme(code: number | null, period = '3y') {
+  return useQuery({
+    queryKey: ['mf', 'scheme', code, period],
+    queryFn: () => import('./api').then((m) => m.mfApi.getScheme(code as number, period)),
+    enabled: !!code,
+  })
+}
+
+export function useMFReturns(code: number | null) {
+  return useQuery({
+    queryKey: ['mf', 'returns', code],
+    queryFn: () => import('./api').then((m) => m.mfApi.getReturns(code as number)),
+    enabled: !!code,
+  })
+}
+
+export function useMFRisk(code: number | null) {
+  return useQuery({
+    queryKey: ['mf', 'risk', code],
+    queryFn: () => import('./api').then((m) => m.mfApi.getRisk(code as number)),
+    enabled: !!code,
+  })
+}
+
+// ── IPO HOOKS ─────────────────────────────────────────────────────
+export function useIPOs(refreshSeed = 0) {
+  return useQuery({
+    queryKey: ['ipo', 'all', refreshSeed],
+    queryFn: () => import('./api').then((m) => m.ipoApi.all(refreshSeed > 0)),
+    refetchInterval: 120000,
   })
 }

@@ -1,172 +1,121 @@
-# QuantAI — Session Context and Migration Plan
+# QuantAI — Session Context
+
+## Project Direction (as of 2026-06-20)
+
+**Full revamp** of existing codebase into a Groww-like comprehensive investment analyzer.
+
+- **Scope**: Stocks, Mutual Funds, IPO/SME (MVP) → F&O, Commodities (later phases)
+- **Target**: Personal use, single user, localhost/Docker
+- **Constraint**: 100% free/open-source, zero paid APIs
+- **Plan**: See `PROJECT_PLAN.md` for complete spec
+
+### Key Decision: Revamp, Not Rewrite
+Existing code has working infra (Docker Compose, Postgres+TimescaleDB, Redis, Celery, Ollama) but backend is messy and frontend is a scaffold. Approach:
+- **Keep**: Docker Compose setup, database infra, Redis/Celery config
+- **Restructure**: Backend → clean `modules/` pattern (stocks, mutual_funds, ipo, portfolio, etc.)
+- **Rebuild**: Frontend from scratch with proper component architecture
+- **Replace primary data source**: jugaad-data replaces yfinance as primary (yfinance 429 blocked)
 
 ## Current Architecture
-- **Backend**: Monolithic FastAPI app in `/backend`
-  - Routers: stocks.py, screener.py, portfolio.py, backtest.py, macro.py, ai.py
-  - Services: data_service.py, factor_engine.py, ai_service.py
-  - Models: database.py (basic Postgres), schemas.py
-- **Frontend**: Next.js + TypeScript + Tailwind in `/frontend`
-- **Infra**: Docker Compose with 6 services (backend, frontend, ollama, postgres, redis, celery_worker)
+- **Backend**: Monolithic FastAPI in `/backend`
+  - Routers: stocks, screener, portfolio, backtest, macro, ai, alerts, auth, dashboard, earnings, insight, news, quant_lab, strategy_builder, watchlists
+  - Services: data_service, factor_engine, ai_service, cache_service, celery_app, fast_data, fyers_client, ingestion_service, auth_service
+  - Models: database.py (Postgres), schemas.py
+- **Frontend**: Next.js + TypeScript + Tailwind in `/frontend` (scaffold, pages exist but minimal)
+- **Infra**: Docker Compose (backend, frontend, ollama, postgres, redis, celery_worker)
 
-## Status (as of 2026-06-19)
+## Known Issues (carried forward)
 
-### Fixed Bugs
-1. **Quote endpoint 404** → Changed to 503, fixed `_fetch_yfinance_quote` to use `getattr()` instead of `.get()` on `fast_info` object
-2. **Fundamentals endpoint 404** → Changed to 503
-3. **Screener POST slow** → Replaced sequential loops with `_gather_limited` (bounded concurrency, default 8)
-4. **Portfolio POST 500 (FK violation)** → Added `_ensure_demo_user()` that seeds a users row with placeholder `hashed_pw`
-5. **Portfolio GET 500 (tuple unpack bug)** → Fixed slicing of `_gather_limited` flat list results
-6. **Portfolio GET slow** → Changed 3×N sequential awaits into `_gather_limited`
-7. **Portfolio FK path bug** → Fixed `select(PositionModel).where(PortfolioModel.id == ...)` → `where(PositionModel.portfolio_id == ...)`
-8. **Portfolio GET response validation 500** → Removed `response_model=dict` from `@router.get("/{portfolio_id}")`
+### Data Source Reality (verified 2026-06-20 from inside the container, Indian IP)
+Empirically probed — what actually works from this machine:
+- ✅ **Direct Yahoo v8 chart API** (`services/fast_data.py`, `query1.finance.yahoo.com/v8/finance/chart`) — the ONLY working live price/index source. Returns current data (RELIANCE, ^NSEI, INR=X all dated to the trading day).
+- ✅ **NSE public APIs WITH cookie warming** (`services/nse_live.py`) — work from this IP: `/api/fiidiiTradeReact` (live FII/DII), `/api/all-upcoming-issues?category=ipo`, `/api/public-past-issues?category=eq` (IPOs). Bare requests get 403; warming cookies first fixes it.
+- ✅ **mfapi.in** (MF NAV), **screener.in** (fundamentals), **World Bank API** (CPI/GDP, free no-key).
+- ❌ **yfinance library** `download`/`Ticker.info` — JSONDecodeError (Yahoo blocks the library endpoints; the direct v8 chart API still works).
+- ❌ **jugaad-data, nsepython, NseIndiaApi** — all fail (NSE 403 / JSON decode). The earlier plan to "switch to jugaad-data as primary" does NOT work here; use direct Yahoo + cookie-warmed nse_live instead.
 
-### Remaining Issues
-- **yfinance globally 429'd** from container IP — all quote/fundamentals/price-history calls via Yahoo fail
-- **nsepython also fails** — JSON decode errors (network/geo blocked)
-- **Screener POST** → 503 because every fundamentals call fails
-- **No real live data available** from any free source in this Docker network
-- **High latency** — factor scores, technicals computed on-request (no precomputation)
+### Stale-data fixes applied (2026-06-20)
+Macro was hardcoded (2024–25 dates) / random; factor scores were flat 60; IPO/MF partly seed.
+- Macro now LIVE: USD/INR (Yahoo INR=X), FII/DII (NSE), CPI+GDP (World Bank). Repo rate = RBI policy path (no free API; current-dated, labelled "last published").
+- Factor/composite scores computed live from price momentum (`data_service._composite_for`), cached 1h.
+- IPO now live from NSE; MF live from mfapi. Caches cleared after each fix.
 
-### Test Results
-| Endpoint | Status | Notes |
+### Backend Bugs (previously fixed, verify after revamp)
+1. Quote endpoint → was 404, fixed to 503 with `getattr()` on `fast_info`
+2. Portfolio FK violation → fixed with `_ensure_demo_user()`
+3. Portfolio tuple unpack bug → fixed slicing of `_gather_limited` results
+4. Screener slow → fixed with `_gather_limited` bounded concurrency
+
+### Architecture Issues
+- No precomputation — factor scores, technicals computed on-the-fly
+- No systematic caching — every request hits data source
+- Monolithic — no module separation
+- No auth (not needed for personal use, but `_ensure_demo_user` hack should be cleaned up)
+
+## Revamp Progress
+
+| Task | Status | Notes |
 |---|---|---|
-| POST /portfolio | ✅ 200 | Demo user auto-created |
-| POST /portfolio/{id}/positions | ✅ 200 | |
-| GET /portfolio/{id} | ✅ 200 | Sectors blank due to yfinance 429 |
-| GET /portfolio/{id}/sector-allocation | ✅ 200 | All "Unknown" sector |
-| GET /{ticker}/quote | ❌ 503 | yfinance 429 |
-| GET /{ticker}/fundamentals | ❌ 503 | yfinance 429 |
-| POST /screener | ❌ 503 | yfinance 429 |
-| GET /sectors | ⚠️ empty | yfinance 429 |
-| GET /{ticker}/factors | ✅ works | Uses cached/available data |
-| GET /{ticker}/technicals | ✅ works | Same |
-| GET /{ticker}/history | ✅ works | Same |
-| GET /macro/* | ✅ works | Static data |
-| POST /backtest/strategies | ✅ works | |
+| PROJECT_PLAN.md created | ✅ Done | Full spec with all modules, APIs, DB schema |
+| Full Docker stack running | ✅ Done | `docker compose up` — all 7 containers healthy; Ollama llama3.2 pulled; real NSE quotes/dashboard/macro flowing |
+| Backend `modules/` foundation | ✅ Done | `backend/modules/` package created per plan §4 (router/service/schemas/models pattern) |
+| Mutual Fund module | ✅ Done | `modules/mutual_funds` — live mfapi.in search, NAV history, returns/CAGR, risk (vol/Sharpe/Sortino/maxDD), SIP calc, compare. Redis-cached + seed fallback |
+| IPO module | ✅ Done | `modules/ipo` — upcoming/open/listed/SME/calendar, date-derived status, GMP, subscription, listing gains. Seed dataset + best-effort live NSE |
+| Frontend: MF + IPO pages | ✅ Done | `/mutual-funds` (search, NAV chart, returns, risk, SIP) and `/ipo` (tabbed tracker) + sidebar nav + api.ts/hooks |
+| CORS hardening | ✅ Done | Allow any localhost/127.0.0.1 port (local dev robustness) |
+| Backend restructure to modules/ (existing routers) | ✅ Done | All 17 domains now under `backend/modules/<name>/`; `routers/` package removed; 65 routes verified working. `stocks` is the full router+service+schemas exemplar; thin domains have router.py calling the shared services layer. Remaining refinement: extract `service.py` from the other fat routers (portfolio/screener/watchlists/alerts). |
+| Database schema overhaul | 🟡 Partial | New mf_schemes/mf_nav/ipos tables added via create_all; TimescaleDB hypertables not yet applied |
+| Data source migration (jugaad-data) | ⬜ Not started | |
+| Redis caching layer | 🟡 Partial | cache_service used by new modules; not yet systematic across all endpoints |
+| Celery ingestion tasks (MF NAV, IPO refresh) | ⬜ Not started | MF/IPO served live+cached on-demand; no scheduled ingestion yet |
+| MF holdings / sector allocation | ⬜ Not started | Needs mfdata.in or AMFI source |
+| Portfolio / Watchlist / Alerts revamp | ⬜ Not started | Working in monolith; not yet moved to modules/ |
+| Frontend rebuild (full) | 🟡 Partial | Existing pages work; MF/IPO added; full component-architecture rebuild pending |
+| AI integration | ✅ Existing | Ollama insight/chat already wired and working |
 
-## Blueprint → Implementation Plan
+*Updated 2026-06-20: Full Docker stack brought up and verified end-to-end. modules/ architecture established with the two missing MVP modules (Mutual Funds, IPO) built, wired, and visually verified with live data. Remaining: migrate existing routers into modules/, Celery ingestion for MF/IPO, MF holdings, TimescaleDB hypertables.*
 
-The blueprint is at `C:\Users\harsh\Downloads\project\quant-investment-analyzer-blueprint.md` — a comprehensive production spec for Quant Investment Analyzer.
+## Hardening pass (2026-06-20) — live data + bug fixes
 
-### Module Gap Analysis (vs Blueprint Section 3)
+Audited every page/endpoint for stale data and functional bugs. Fixes:
 
-| Module | Status | Notes |
+- **Fundamentals were seed + wrong keys.** `data_service.get_fundamentals` called a broken internal scraper (`_fetch_screener_in_fundamentals` → `{}`), then 429'd yfinance, then seed — and returned camelCase keys the UI didn't read. Now routes through the working `screener_service` (via `fast_data`), normalises to snake_case (`pe_ratio`/`market_cap`/…), derives `pb_ratio` (price/book) and `debt_equity`, and `/stocks/{t}/fundamentals` attaches absolute single-stock `factor_scores` via `compute_quant_factors`. Real values now (e.g. TCS ROE 65%, ROCE 77%).
+- **Seed-cache poisoning.** Seed fallback was cached 24h (same as live), so a transient miss masked live data all day. Now seed is cached only 120s (self-heals) and tagged `source:"seed"`; live cached 24h.
+- **screener.in rate-limit blocks.** Bursts (warm-up/screener) tripped blocks → mass seed. Added a global throttle in `screener_service`: `Semaphore(2)` + 1.5s min-interval rate gate. Coverage went 2/10 → 17/18 live.
+- **Screener timed out (>110s) then 500'd.** It screened all 1,103 seed tickers live (yfinance 429 storm) → bounded to NIFTY-50; removed the yfinance fundamentals fallback entirely (pure 429 noise here); coerced sparse fundamentals to numeric (factor engine `-NaN`); fixed `name=NaN` ValidationError. Now ~0.5s.
+- **Sector 1w/1m were fabricated** (`1d × random`) → now real returns from member-stock price history.
+- **Refresh buttons** now bypass cache end-to-end (macro/IPO/MF: `refresh` param threaded through routers→services→frontend hooks/buttons).
+- **Celery was harmful**: `refresh-daily-seed-cache` wrote seed into `fund_` every 6h (re-poisoning); `ingest-prices` ran yfinance over 100 tickers/15min (429/403 storms). Disabled both; beat now runs only a light LIVE `warm_live_universe_task` (NIFTY-50). Backend `lifespan` warms the live universe on startup.
+- **Verified live**: stocks (quote/history/fundamentals/technicals/factors), dashboard (indices/movers/sector/factor-signals), screener, portfolio P&L (live prices), macro, MF, IPO. **AI (Ollama llama3.2) confirmed working.**
+
+Key constraint: free Indian data is fragile under load — screener.in blocks bursts, NSE needs cookie warming, Yahoo's library endpoints 429 (only the v8 chart API works). Always throttle batch fundamental fetches.*
+
+## Data Source Strategy
+
+| Source | Purpose | Priority |
 |---|---|---|
-| Dashboard | ❌ Missing | No personalized home page |
-| Stock Analysis | ✅ Partial | Has quote/history/fundamentals/factors/technicals endpoints |
-| ETF Analysis | ❌ Missing | |
-| Index Analysis | ❌ Missing | |
-| Crypto Analysis | ❌ Missing | |
-| Portfolio Analytics | ✅ Partial | Basic CRUD + risk metrics (Sharpe, beta, vol, MDD) |
-| Quant Lab | ❌ Missing | Sandbox for custom factor models |
-| Screener | ✅ Partial | Basic implementation, blocked by yfinance |
-| AI Research Assistant | ❌ Missing | Basic ollama service, no RAG/tool-calling |
-| News Intelligence | ❌ Missing | |
-| Earnings Center | ❌ Missing | |
-| Macro Dashboard | ✅ Partial | Static data only |
-| Watchlists | ❌ Missing | |
-| Alerts | ❌ Missing | |
-| Backtesting | ✅ Partial | Basic implementation |
-| Strategy Builder | ❌ Missing | No-code rule composer |
+| jugaad-data | Stocks (live + historical), F&O, indices | Primary |
+| mfapi.in | Mutual fund NAV (14k+ schemes) | Primary |
+| mfdata.in | MF holdings, ratios, analytics | Supplementary |
+| yfinance | Fallback for stocks, commodities | Fallback |
+| pnsea | NSE data fallback | Fallback |
+| GNews API | News (100 req/day free) | Primary |
+| NSE corporate actions | IPO data | Primary |
+| VADER | Sentiment scoring | Internal |
+| RBI DBIE / FRED | Macro data | Primary |
 
-### Architecture Gaps (vs Blueprint Sections 5-7)
+## File Structure Reference
 
-| Blueprint Spec | Current State | Delta |
-|---|---|---|
-| Microservices per domain | Monolithic FastAPI | Single app, no service decomposition |
-| GraphQL gateway | REST only | N+1 query problem for composite pages |
-| TimescaleDB hypertables | Plain Postgres | No time-series optimization for prices |
-| Event bus (Redis Streams → Kafka) | No event bus | Tight coupling between services |
-| Materialized views + precomputation | On-request computation | High latency |
-| Background job queue | Celery worker exists but underused | Heavy work blocks HTTP requests |
-| Multi-layer caching (Redis, CDN) | Basic TTL cache | No systematic cache strategy |
-| Auth (Keycloak/Ory) | _ensure_demo_user hack | No real auth or RBAC |
-| Normalized DB schema | Minimal tables | Missing 10+ tables |
-| Vector store (pgvector → Qdrant) | Nothing | No embeddings or semantic search |
-| Hybrid search (OpenSearch + vector) | Nothing | No search service |
+```
+quant-analyzer/
+├── PROJECT_PLAN.md          ← Complete project specification
+├── CONTEXT.md               ← This file (session context, progress tracking)
+├── README.md                ← How to run the project
+├── docker-compose.yml       ← Docker infra
+├── backend/                 ← FastAPI backend (to be restructured)
+├── frontend/                ← Next.js frontend (to be rebuilt)
+└── tasks/                   ← Task files
+```
 
-### Database Gaps (vs Blueprint Section 7)
-
-Current tables: users, portfolios, positions
-Blueprint tables: + companies, fundamentals (normalized), factor_scores, watchlists, watchlist_items, alerts, strategies, backtest_runs, prices (Timescale hypertable)
-
-### Latency Root Causes (Blueprint Section 13)
-1. No precomputation — factor scores, technicals computed on-the-fly
-2. No caching hierarchy — every request hits the data source
-3. Monolithic requests — Stock Analysis page needs 4+ sequential API calls
-4. Synchronous heavy work — no async job pattern
-5. No GraphQL — frontend makes multiple round-trips
-
-### Phased Implementation Plan
-
-#### Phase A — Fix Latency & Data Sources (1-2 weeks)
-1. Add seed/dummy data fallback for when yfinance/nsepython fail
-2. Add retry with exponential backoff to yfinance calls
-3. Precompute factor scores + technicals via nightly Celery job → cache in DB table
-4. Add Redis caching layer for all API responses with TTL strategy
-5. Convert expensive endpoints to async job pattern (return job ID, poll for result)
-
-#### Phase B — Database Schema Overhaul (1 week)
-1. Add companies, fundamentals (normalized EAV), factor_scores, watchlists, alerts, strategies, backtest_runs tables
-2. Set up TimescaleDB hypertable for prices
-3. Add proper foreign keys and indices matching blueprint ER diagram
-4. Migration scripts for existing data
-
-#### Phase C — New Modules (3-4 weeks)
-1. Dashboard module (market overview, watchlist performance, macro snapshot)
-2. Watchlists + Alerts CRUD + evaluation engine
-3. Quant Lab (custom factor builder UI + backend)
-4. Strategy Builder (no-code rules → backtest pipeline)
-5. AI Research Assistant (RAG with tool-calling over filings/news/transcripts)
-
-#### Phase D — Architecture Evolution (ongoing)
-1. Introduce GraphQL gateway (or BFF pattern using Strawberry/Ariadne)
-2. Event bus for data pipeline events (Redis Streams → Kafka/Redpanda)
-3. Auth via Keycloak/Ory
-4. Search service (OpenSearch + pgvector hybrid)
-5. ETF/Index/Crypto modules
-
-### Key Constraints
-- 100% free/open-source only (no paid APIs or vendors)
-- Must run via Docker Compose
-- Data source reliability is the #1 blocker (yfinance 429)
-- Latency is the #2 concern (user reports "very high latency")
-
-## FYERS API Integration (Future Upgrade)
-
-### Why FYERS
-- **Only free live data source for Indian markets** — zero-cost trading account (no demat, no AMC) provides WebSocket streaming with millisecond latency
-- **WebSocket ticks** — real-time LTP, OHLC, depth updates with no polling
-- **Historical data** — REST API for daily/minute candles, positions, orders
-- **Market data API** — Indices, option chains, market status via REST + WebSocket
-
-### Setup Notes (for when user wants to migrate)
-1. Register at [fyers.in](https://fyers.in) → Open a **trading-only account** (no demat needed, zero AMC)
-2. Generate API credentials from My Profile → API Access
-3. FYERS uses OAuth 2.0 with app ID + secret → redirect URL grant flow:
-   ```
-   https://api.fyers.in/api/v2/token
-   ?client_id=YOUR_APP_ID
-   &redirect_uri=YOUR_CALLBACK
-   &response_type=code
-   &state=STATE
-   ```
-4. Access token lifetime: 1 day (real-time) or longer for history-only tokens
-5. Add `fyers-apiv3` Python library to requirements.txt
-6. Create `backend/services/fyers_stream.py` — WebSocket manager for real-time ticks
-7. Update `data_service.py` to prefer FYERS as primary source, falling back to NseIndiaApi → yfinance → seed data
-
-### FYERS vs Alternatives
-| Source | Cost | Latency | Coverage | Docker-Friendly |
-|---|---|---|---|---|
-| yfinance | Free | 15-min delay | Global | ❌ (429 blocked) |
-| NseIndiaApi | Free | ~1s (polled) | NSE only | ✅ (httpx/http2) |
-| nsepython | Free | ~1s (polled) | NSE only | ❌ (geo-blocked) |
-| **FYERS** | **Free account** | **<100ms (WS)** | **NSE/BSE/Indices** | **✅ (dedicated API)** |
-| Zerodha Kite | ₹200/month | <50ms (WS) | NSE/BSE/MCX | ✅ (paid) |
-
-### When to Enable
-- After core seed-data fallback is proven stable
-- User registers for FYERS trading account (5 min process)
-- Primarily for real-time portfolio tracking and alert evaluation engine
-- Seed data continues as fallback when FYERS token expires or network issues occur
+---
+*Last updated: 2026-06-20 — Full revamp direction established*

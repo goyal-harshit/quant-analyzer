@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 import pandas as pd
 
 from models.schemas import ScreenerFilter, ScreenerResponse, ScreenerResult
-from services.data_service import data_service, _gather_limited
+from services.data_service import data_service, _gather_limited, NIFTY_50_TICKERS
 from services.factor_engine import FactorEngine
 from services.seed_data import DEFAULT_TICKERS, get_seed_screener_results, get_seed_sectors, get_seed_fundamentals, get_seed_quote
 from services.cache_service import cache, TTL_FACTOR_SCORES
@@ -27,7 +27,10 @@ async def screen_stocks(filters: ScreenerFilter):
     """Screen the universe using factor and fundamental filters.
     All data fetched in ONE parallel batch for minimum latency.
     """
-    universe = filters.tickers if filters.tickers and len(filters.tickers) > 0 else DEFAULT_TICKERS
+    # Live screening over a bounded liquid universe (NIFTY 50). Screening all
+    # 1,100+ seed tickers live is not viable on free data sources (429 storms,
+    # minutes of latency); these 50 are warmed on startup so the screen is fast.
+    universe = filters.tickers if filters.tickers and len(filters.tickers) > 0 else NIFTY_50_TICKERS
 
     # Single parallel batch: fundamentals + history + quotes all at once
     all_coros = []
@@ -68,6 +71,14 @@ async def screen_stocks(filters: ScreenerFilter):
         raise HTTPException(status_code=503, detail="Unable to fetch universe data")
 
     fund_df = pd.DataFrame(fundamentals_list).set_index("ticker")
+    # Real (live) fundamentals are sparse — coerce numeric columns so None -> NaN,
+    # otherwise object-dtype columns break the factor engine's arithmetic (e.g. -ev/ebitda).
+    for c in ("pe_ratio", "pb_ratio", "ev_ebitda", "ps_ratio", "fcf_yield", "roe",
+              "gross_margin", "ebitda_margin", "net_margin", "debt_equity",
+              "interest_coverage", "revenue_growth", "eps_growth",
+              "operating_profit_growth", "accruals_ratio", "dividend_yield", "market_cap"):
+        if c in fund_df.columns:
+            fund_df[c] = pd.to_numeric(fund_df[c], errors="coerce")
     price_matrix = pd.DataFrame(price_histories)
 
     # Compute factor scores — prefer Redis cache per ticker, compute missing
@@ -131,7 +142,10 @@ async def screen_stocks(filters: ScreenerFilter):
 
         from services.seed_data import _STOCK_MAP
         s_data = _STOCK_MAP.get(ticker)
-        name_val = fund.get("name") or (s_data[1] if s_data else ticker)
+        name_val = fund.get("name")
+        # Live fundamentals omit "name" -> NaN in the DataFrame (and NaN is truthy in Python).
+        if name_val is None or (isinstance(name_val, float) and pd.isna(name_val)):
+            name_val = s_data[1] if s_data else ticker
 
         result = ScreenerResult(
             ticker=ticker,
