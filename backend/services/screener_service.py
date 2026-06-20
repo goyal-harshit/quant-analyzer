@@ -63,13 +63,30 @@ def _extract_table_data(soup: BeautifulSoup, section_id: str) -> dict:
     return result
 
 
+# Global throttle — screener.in blocks bursts, so serialise scrapes to a steady
+# rate (min-interval gate) across ALL callers (warm-up, screener, on-demand).
+_SCREENER_SEM = asyncio.Semaphore(2)
+_RATE_LOCK = asyncio.Lock()
+_LAST_TS = [0.0]
+_MIN_GAP = 1.5  # seconds between successive screener.in requests (avoids burst blocks)
+
+
+async def _rate_gate():
+    import time
+    async with _RATE_LOCK:
+        gap = time.monotonic() - _LAST_TS[0]
+        if gap < _MIN_GAP:
+            await asyncio.sleep(_MIN_GAP - gap)
+        _LAST_TS[0] = time.monotonic()
+
+
 class ScreenerService:
     """Scrapes Screener.in for Indian stock fundamental data."""
 
     def __init__(self):
         self.base_url = "https://www.screener.in/company/{ticker}"
         self._cache: dict = {}
-        self._cache_ttl = 300  # 5 min cache
+        self._cache_ttl = 1800  # 30 min in-process cache (fundamentals change slowly)
 
     async def get_fundamentals(self, ticker: str) -> dict:
         """
@@ -88,12 +105,14 @@ class ScreenerService:
 
         url = self.base_url.format(ticker=ticker)
         try:
-            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-                resp = await client.get(url, headers=HEADERS)
-                if resp.status_code != 200:
-                    logger.warning(f"Screener.in returned {resp.status_code} for {ticker}")
-                    return {}
-                html = resp.text
+            async with _SCREENER_SEM:
+                await _rate_gate()
+                async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                    resp = await client.get(url, headers=HEADERS)
+                    if resp.status_code != 200:
+                        logger.warning(f"Screener.in returned {resp.status_code} for {ticker}")
+                        return {}
+                    html = resp.text
 
             soup = BeautifulSoup(html, "lxml")
             data = self._parse_screener_page(soup, ticker)

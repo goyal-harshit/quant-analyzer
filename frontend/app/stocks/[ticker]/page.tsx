@@ -1,297 +1,375 @@
+// /frontend/app/stocks/[ticker]/page.tsx
 'use client'
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, TrendingUp, TrendingDown, Zap, RefreshCw, Activity, Shield, Database, Cpu, BarChart3, PieChart } from 'lucide-react'
-import {
-  AreaChart, Area, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  XAxis, YAxis, Tooltip, ResponsiveContainer,
-} from 'recharts'
-import { STOCKS, priceMap, T, fI, pct } from '@/lib/stockData'
+import { 
+  ArrowLeft, RefreshCw, Zap, TrendingUp, TrendingDown, 
+  DollarSign, ShieldAlert, Award, Compass, Sparkles, CheckCircle,
+  HelpCircle, ArrowUpRight, Percent, Calendar, Target
+} from 'lucide-react'
 
-const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
-const sc = v => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
-
-function Badge({ v }) {
-  const c = sc(v)
-  return <span style={{ background: `${c}22`, color: c, border: `1px solid ${c}44`, borderRadius: 4, padding: '2px 9px', fontSize: 12, fontFamily: T.mono, fontWeight: 700 }}>{v}</span>
-}
-
-function Tag({ children, color = '#a78bfa' }) {
-  return <span style={{ background: `${color}22`, color, border: `1px solid ${color}44`, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{children}</span>
-}
-
-function FactorBar({ label, value }) {
-  return (
-    <div style={{ marginBottom: 9 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span style={{ fontSize: 11, color: T.sub }}>{label}</span>
-        <span style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 700, color: sc(value) }}>{value}</span>
-      </div>
-      <div style={{ height: 5, background: T.b, borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${value}%`, borderRadius: 3, background: 'linear-gradient(90deg,#f43f5e,#f59e0b,#22c55e)' }} />
-      </div>
-    </div>
-  )
-}
-
-function CT({ active, payload, label }: { active?: any; payload?: any; label?: any } = {}) {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={{ background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
-      <div style={{ color: T.muted, marginBottom: 4 }}>{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color || T.text, fontFamily: T.mono }}>
-          {typeof p.value === 'number' ? p.value.toFixed(2) : p.value}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-const OLLAMA_URL = 'http://localhost:11434/api/chat'
-const OLLAMA_MODEL = 'llama3.2'
-
-async function callOllama(messages, system) {
-  const res = await fetch(OLLAMA_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      messages: [{ role: 'system', content: system }, ...messages],
-      stream: false,
-      options: { temperature: 0.4 },
-    }),
-  })
-  if (!res.ok) throw new Error('Ollama unreachable')
-  const d = await res.json()
-  return d.message?.content || ''
-}
-
-function buildOfflineReport(s) {
-  const tier = v => v >= 70 ? 'top-tier' : v >= 45 ? 'mid-tier' : 'lower-tier'
-  const peers = STOCKS.filter(x => x.sector === s.sector && x.ticker !== s.ticker).sort((a, b) => b.composite - a.composite).slice(0, 2)
-  return `**Quick Snapshot**
-${s.name} (${s.ticker}) trades at ₹${s.price.toLocaleString('en-IN')} (${pct(s.chg)} today) with a P/E of ${s.pe.toFixed(1)}x and ROE of ${s.roe.toFixed(1)}%. Its composite factor score of ${s.composite}/100 places it in the ${tier(s.composite)} of the Nifty universe within ${s.sector}.
-
-**Strengths**
-• ${s.qual >= 65 ? `Strong Quality score (${s.qual}) — ROE of ${s.roe.toFixed(1)}% signals efficient capital use` : `Revenue growing at ${s.rev.toFixed(1)}% YoY, a reasonable pace for ${s.sector}`}
-• ${s.mom >= 65 ? `Momentum score of ${s.mom} shows strong recent relative price strength` : `Valuation looks measured at ${s.pe.toFixed(1)}x earnings`}
-• ${s.val >= 55 ? `Value score of ${s.val} suggests the stock isn't expensive relative to peers` : `Established scale within the ${s.sector} sector (composite rank: ${s.composite})`}
-
-**Risks**
-• ${s.pe > 40 ? `P/E of ${s.pe.toFixed(1)}x is elevated — leaves limited room for multiple expansion` : `Momentum score of ${s.mom} is muted — limited near-term price catalysts visible in the data`}
-• ${s.pb > 10 ? `P/B of ${s.pb.toFixed(1)}x implies the market is pricing in a lot of future growth` : `Growth score of ${s.grw} suggests topline momentum could be inconsistent quarter to quarter`}
-
-**Factor View**
-A composite score of ${s.composite}/100 (Momentum ${s.mom} · Quality ${s.qual} · Value ${s.val} · Growth ${s.grw}) places ${s.ticker} in the ${tier(s.composite)} of its peer set on a blended multi-factor basis.
-
-**Peers**
-${peers.length ? peers.map(p => `${p.ticker} (composite ${p.composite})`).join(' · ') : 'No close sector peers in this sample universe.'}
-
-⚠️ Generated by QuantAI's offline rule-based engine (no LLM call — Ollama not reachable). Self-host this app with Ollama running locally for full open-source LLM-generated analysis. Educational purposes only — not investment advice.`
-}
+import { useStockQuote, useStockFundamentals, useStockHistory, useStockInsight } from '@/lib/hooks'
+import PageShell from '@/components/layout/PageShell'
+import Card from '@/components/ui/Card'
+import StockChart from '@/components/stocks/StockChart'
+import FundamentalsPanel from '@/components/stocks/FundamentalsPanel'
+import { scoreColor } from '@/lib/stockData'
 
 export default function StockDetail() {
   const params = useParams()
   const router = useRouter()
   const ticker = (params.ticker as string).toUpperCase()
-  const stock = STOCKS.find(s => s.ticker === ticker)
+  
+  const [includeAi, setIncludeAi] = useState(true)
+  const [refreshSeed, setRefreshSeed] = useState(0)
+  
+  // Real data fetching hooks
+  const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker, refreshSeed)
+  const { data: fundamentals, isLoading: fundLoading } = useStockFundamentals(ticker, refreshSeed)
+  const { data: historyData, isLoading: historyLoading } = useStockHistory(ticker, '5y', refreshSeed)
+  const { data: insight, isLoading: insightLoading } = useStockInsight(ticker, includeAi, refreshSeed)
 
-  const [aiText, setAiText] = useState('')
-  const [aiLoad, setAiLoad] = useState(false)
-  const [aiSource, setAiSource] = useState<string | null>(null)
+  const handleBack = () => {
+    router.push('/screener')
+  }
 
-  if (!stock) {
+  const isLoading = quoteLoading || fundLoading || historyLoading
+
+  // Parsing helper to convert raw AI bullet points into structured visual cards
+  const parseAIAnalysis = (text: string | undefined | null) => {
+    if (!text) return null
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    
+    const items = lines.map(line => {
+      // Matches: "- Valuation: text" or "1. Momentum: text"
+      const match = line.match(/^[-•\d\.\s]*\s*(Valuation|Momentum|Risk|Verdict)\s*:\s*(.*)$/i)
+      if (match) {
+        return {
+          title: match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase(),
+          content: match[2]
+        }
+      }
+      return null
+    }).filter((item): item is { title: string; content: string } => item !== null)
+    
+    if (items.length >= 3) {
+      return items
+    }
+    return null
+  }
+
+  // Loading skeleton screen
+  if (isLoading) {
     return (
-      <div style={{ padding: '26px 30px', maxWidth: 1200, fontFamily: T.sans }}>
-        <div style={{ textAlign: 'center', padding: 40, color: T.muted, fontSize: 14 }}>
-          Stock <strong>{ticker}</strong> not found in the Nifty 500 universe.
+      <div className="flex flex-col gap-6 animate-pulse p-4 md:p-8">
+        <div className="flex justify-between items-center pb-4 border-b border-border/50">
+          <div className="space-y-2.5">
+            <div className="h-9 w-40 bg-elevated rounded-lg" />
+            <div className="h-4 w-72 bg-elevated rounded-lg" />
+          </div>
+          <div className="h-10 w-24 bg-elevated rounded-lg" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-24 bg-card border border-border/50 rounded-xl p-4 space-y-3">
+              <div className="h-3.5 w-20 bg-elevated rounded" />
+              <div className="h-6 w-32 bg-elevated rounded" />
+              <div className="h-3 w-16 bg-elevated rounded" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 space-y-6">
+            <div className="h-[460px] bg-card border border-border/50 rounded-xl" />
+            <div className="h-80 bg-card border border-border/50 rounded-xl" />
+          </div>
+          <div className="space-y-6">
+            <div className="h-[380px] bg-card border border-border/50 rounded-xl" />
+            <div className="h-[380px] bg-card border border-border/50 rounded-xl" />
+          </div>
         </div>
       </div>
     )
   }
 
-  const pts = priceMap[stock.ticker] || []
-  const radar = [
-    { f: 'Momentum', v: stock.mom },
-    { f: 'Quality', v: stock.qual },
-    { f: 'Value', v: stock.val },
-    { f: 'Growth', v: stock.grw },
-    { f: 'Composite', v: stock.composite },
-  ]
-
-  async function getAI() {
-    setAiLoad(true)
-    setAiText('')
-    setAiSource(null)
-    const prompt = `Analyze ${stock.name} (${stock.ticker}, NSE):
-Price: ₹${stock.price} | 1-Day: ${pct(stock.chg)} | Sector: ${stock.sector} | MCap: ₹${stock.mcap}K Cr
-PE: ${stock.pe}x | PB: ${stock.pb}x | ROE: ${stock.roe}% | Revenue Growth: ${stock.rev}%
-Factor Scores (0-100): Momentum ${stock.mom} · Quality ${stock.qual} · Value ${stock.val} · Growth ${stock.grw} · Composite ${stock.composite}
-
-Provide:
-**Quick Snapshot** (2-3 sentences on what metrics reveal)
-**Strengths** (top 3 quantitative positives)
-**Risks** (top 2 risks from data)
-**Factor View** (what composite score of ${stock.composite}/100 means in ${stock.sector} context)
-**Peers** (1-2 comparable NSE stocks to benchmark against)`
-
-    try {
-      const text = await callOllama(
-        [{ role: 'user', content: prompt }],
-        'You are a quantitative equity analyst specializing in Indian NSE/BSE stocks. Provide structured, data-driven analysis. Format clearly with headers. End with: ⚠️ Educational purposes only — not investment advice.'
-      )
-      setAiText(text)
-      setAiSource('ollama')
-    } catch {
-      setAiText(buildOfflineReport(stock))
-      setAiSource('offline')
-    }
-    setAiLoad(false)
-  }
+  const changePct = quote?.change_pct ?? 0
+  const isPositive = changePct >= 0
+  const history = historyData?.data ?? []
+  const parsedAi = parseAIAnalysis(insight?.ai_summary)
 
   return (
-    <div style={{ padding: '26px 30px', maxWidth: 1200, fontFamily: T.sans }}>
-      <button
-        onClick={() => router.push('/screener')}
-        style={{ background: 'none', border: 'none', color: T.muted, cursor: 'pointer', fontSize: 12, marginBottom: 10, padding: 0 }}
-      >
-        ← Back to Screener
-      </button>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div
-            style={{
-              width: 46, height: 46, background: `${T.blue}33`, borderRadius: 10,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 700, fontFamily: T.mono, color: T.blue,
+    <PageShell 
+      title={`${ticker}`} 
+      subtitle={quote?.name || 'NSE Equities Market'}
+      actions={
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setRefreshSeed(prev => prev + 1)
             }}
+            className="flex items-center justify-center p-2 bg-elevated border border-border/80 hover:bg-border/40 text-textSub hover:text-textPrimary rounded-lg transition-all"
+            title="Refresh Feed"
           >
-            {stock.ticker.slice(0, 2)}
+            <RefreshCw className={`w-4 h-4 ${(quoteLoading || insightLoading) ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 px-4 py-2 bg-elevated/80 border border-border/80 hover:bg-border/40 text-textSub hover:text-textPrimary rounded-lg text-xs font-bold transition-all shadow-md"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Screener
+          </button>
+        </div>
+      }
+    >
+      {/* Top Banner stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Price Card */}
+        <div className="glass rounded-xl p-5 border border-border/60 shadow-md bg-card/40 hover:border-brand/40 transition-all duration-300 relative group overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-brand group-hover:h-full transition-all" />
+          <div className="flex justify-between items-center text-textMuted uppercase tracking-wider font-semibold text-[10px]">
+            <span>Current Price</span>
+            <DollarSign className="w-3.5 h-3.5 text-brand" />
           </div>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>
-              {stock.ticker} <span style={{ fontSize: 13, color: T.muted, fontWeight: 400 }}>· {stock.name}</span>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <Tag>{stock.sector}</Tag>
-              <Tag color={T.blue}>NSE Listed</Tag>
-            </div>
+          <div className="mt-2 text-2xl font-bold font-mono text-textPrimary leading-none">
+            ₹{(quote?.price ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className={`flex items-center gap-1 font-mono text-xs font-bold mt-2.5 ${isPositive ? 'text-success' : 'text-danger'}`}>
+            {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+            {isPositive ? '+' : ''}{(quote?.change_pct ?? 0).toFixed(2)}%
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: T.mono, color: T.text }}>
-            ₹{stock.price.toLocaleString('en-IN')}
+
+        {/* 52W High Card */}
+        <div className="glass rounded-xl p-5 border border-border/60 shadow-md bg-card/40 hover:border-warn/40 transition-all duration-300 relative group overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-warn group-hover:h-full transition-all" />
+          <div className="flex justify-between items-center text-textMuted uppercase tracking-wider font-semibold text-[10px]">
+            <span>52W High</span>
+            <TrendingUp className="w-3.5 h-3.5 text-warn" />
           </div>
-          <div style={{ fontSize: 14, fontFamily: T.mono, color: stock.chg >= 0 ? T.green : T.red }}>
-            {stock.chg >= 0 ? '\u25B2' : '\u25BC'} {Math.abs(stock.chg).toFixed(2)}%
+          <div className="mt-2 text-2xl font-bold font-mono text-textPrimary leading-none">
+            ₹{(quote?.fifty_two_week_high ?? quote?.price ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+          </div>
+          <div className="text-[10px] text-textMuted mt-3">Trailing 12-month peak</div>
+        </div>
+
+        {/* 52W Low Card */}
+        <div className="glass rounded-xl p-5 border border-border/60 shadow-md bg-card/40 hover:border-purple/40 transition-all duration-300 relative group overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-purple group-hover:h-full transition-all" />
+          <div className="flex justify-between items-center text-textMuted uppercase tracking-wider font-semibold text-[10px]">
+            <span>52W Low</span>
+            <TrendingDown className="w-3.5 h-3.5 text-purple" />
+          </div>
+          <div className="mt-2 text-2xl font-bold font-mono text-textPrimary leading-none">
+            ₹{(quote?.fifty_two_week_low ?? quote?.price ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+          </div>
+          <div className="text-[10px] text-textMuted mt-3">Trailing 12-month floor</div>
+        </div>
+
+        {/* Quant score Card */}
+        <div className="glass rounded-xl p-5 border border-border/60 shadow-md bg-card/40 hover:border-success/40 transition-all duration-300 relative group overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-success group-hover:h-full transition-all" />
+          <div className="flex justify-between items-center text-textMuted uppercase tracking-wider font-semibold text-[10px]">
+            <span>Quant Score</span>
+            <Award className="w-3.5 h-3.5 text-success" />
+          </div>
+          <div className="mt-1.5 flex items-baseline gap-2.5">
+            {fundamentals?.factor_scores?.composite !== null && fundamentals?.factor_scores?.composite !== undefined ? (
+              <>
+                <span 
+                  className="text-3xl font-mono font-black"
+                  style={{ color: scoreColor(fundamentals.factor_scores.composite) }}
+                >
+                  {Math.round(fundamentals.factor_scores.composite)}
+                </span>
+                <span className="text-[9px] text-textMuted uppercase font-bold tracking-widest">
+                  Percentile
+                </span>
+              </>
+            ) : (
+              <span className="text-3xl font-mono font-black text-textMuted">
+                N/A
+              </span>
+            )}
+          </div>
+          <div className="text-[9px] text-textSub mt-2.5 flex items-center gap-1 font-semibold uppercase">
+            <Sparkles className="w-3 h-3 text-success animate-pulse" />
+            Factor strength score
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 14, marginBottom: 14 }}>
-        <div style={card({ padding: '16px 18px' })}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 14 }}>Price History (6M)</div>
-          <ResponsiveContainer width="100%" height={195}>
-            <AreaChart data={pts} margin={{ top: 4, right: 4, bottom: 0, left: 50 }}>
-              <defs>
-                <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={stock.chg >= 0 ? T.green : T.red} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={stock.chg >= 0 ? T.green : T.red} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="d" tick={{ fontSize: 10, fill: T.muted }} tickLine={false} axisLine={false} interval={15} />
-              <YAxis
-                tick={{ fontSize: 10, fill: T.muted, fontFamily: T.mono }}
-                tickLine={false} axisLine={false} domain={['auto', 'auto']}
-                tickFormatter={v => '₹' + v.toLocaleString('en-IN')}
-              />
-              <Tooltip content={<CT />} />
-              <Area type="monotone" dataKey="p" stroke={stock.chg >= 0 ? T.green : T.red} strokeWidth={2} fill="url(#sg)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div style={card({ padding: '16px 14px' })}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 4 }}>Factor Profile</div>
-          <ResponsiveContainer width="100%" height={190}>
-            <RadarChart data={radar}>
-              <PolarGrid stroke={T.b} />
-              <PolarAngleAxis dataKey="f" tick={{ fontSize: 10, fill: T.muted }} />
-              <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar dataKey="v" stroke={T.blue} fill={T.blue} fillOpacity={0.18} strokeWidth={2} />
-            </RadarChart>
-          </ResponsiveContainer>
-          <div style={{ textAlign: 'center', marginTop: 4 }}><Badge v={stock.composite} /></div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <div style={card({ padding: '16px 18px' })}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 14 }}>Fundamentals</div>
-          {[
-            ['P/E Ratio', stock.pe.toFixed(1) + 'x', stock.pe < 30 ? T.green : stock.pe < 60 ? T.amber : T.red],
-            ['P/B Ratio', stock.pb.toFixed(1) + 'x', stock.pb < 4 ? T.green : stock.pb < 10 ? T.amber : T.red],
-            ['ROE', stock.roe.toFixed(1) + '%', stock.roe > 18 ? T.green : stock.roe > 10 ? T.amber : T.red],
-            ['Revenue Growth', stock.rev.toFixed(1) + '%', stock.rev > 15 ? T.green : stock.rev > 7 ? T.amber : T.red],
-            ['Market Cap', '₹' + stock.mcap + 'K Cr', T.text],
-            ['Sector', stock.sector, T.text],
-          ].map(([l, v, c]) => (
-            <div key={l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${T.b}` }}>
-              <span style={{ fontSize: 12, color: T.sub }}>{l}</span>
-              <span style={{ fontSize: 12, fontFamily: T.mono, fontWeight: 600, color: c }}>{v}</span>
-            </div>
-          ))}
-          <div style={{ marginTop: 16 }}>
-            {[['Momentum', stock.mom], ['Quality', stock.qual], ['Value', stock.val], ['Growth', stock.grw]].map(([l, v]) => (
-              <FactorBar key={l} label={l} value={v} />
-            ))}
-          </div>
-        </div>
-
-        <div style={card({ padding: '16px 18px', display: 'flex', flexDirection: 'column' })}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>AI Research Summary</div>
-            <button
-              onClick={getAI}
-              disabled={aiLoad}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, background: T.blue, border: 'none',
-                borderRadius: 6, padding: '7px 13px', fontSize: 12, color: '#fff',
-                cursor: aiLoad ? 'not-allowed' : 'pointer', opacity: aiLoad ? 0.6 : 1,
-              }}
-            >
-              <Zap size={12} />{aiLoad ? 'Analyzing…' : 'Generate AI Report'}
-            </button>
-          </div>
-          {aiSource && (
-            <div style={{ marginBottom: 8 }}>
-              <Tag color={aiSource === 'ollama' ? T.green : T.amber}>
-                {aiSource === 'ollama' ? '⚡ Ollama (local LLM)' : '📐 Offline Engine'}
-              </Tag>
+      {/* Main Content Layout Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+        {/* Left 2 Columns: Chart & Ratios */}
+        <div className="md:col-span-2 space-y-6">
+          {/* Interactive Price Chart with Duration Options */}
+          {history.length > 0 ? (
+            <StockChart data={history} />
+          ) : (
+            <div className="glass border border-border/60 p-8 rounded-xl text-center text-textMuted bg-card/40">
+              No historical price telemetry available for {ticker}.
             </div>
           )}
-          <div style={{ flex: 1, overflowY: 'auto', fontSize: 12, color: T.text, lineHeight: 1.75, minHeight: 280 }}>
-            {!aiText && !aiLoad && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10, color: T.muted }}>
-                <Zap size={28} color={T.blue} style={{ opacity: 0.4 }} />
-                <div style={{ textAlign: 'center', fontSize: 12 }}>
-                  <div style={{ color: T.sub, marginBottom: 4 }}>Free, Open-Source AI Research</div>
-                  <div>Tries your self-hosted Ollama instance first, falls back to an offline rule-based engine — zero cost either way.</div>
+
+          {/* Fundamentals Grid */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Percent className="w-4.5 h-4.5 text-brand" />
+              <h2 className="section-title text-base font-bold uppercase tracking-wider">Corporate Ratios</h2>
+            </div>
+            <FundamentalsPanel data={fundamentals} />
+          </div>
+        </div>
+
+        {/* Right Column: AI Analysis & Factor breakdown */}
+        <div className="space-y-6">
+          {/* QuantAI Research Narrative Card */}
+          <div className="glass border border-border/60 bg-gradient-to-b from-[#0a1120] to-[#040914] rounded-xl p-5 md:p-6 shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[350px]">
+            {/* Ambient AI Glow background effect */}
+            <div className="absolute -top-12 -left-12 w-32 h-32 bg-brand/15 rounded-full blur-[40px] pointer-events-none" />
+            
+            <div className="flex justify-between items-center pb-3 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-brand animate-bounce" />
+                <div>
+                  <span className="text-xs font-black text-textPrimary uppercase tracking-widest font-display">
+                    QuantAI Insights
+                  </span>
+                  <div className="text-[10px] text-textMuted mt-0.5 font-mono">
+                    llama3.2 @ local-ollama
+                  </div>
                 </div>
               </div>
-            )}
-            {aiLoad && (
-              <div style={{ color: T.muted, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Analyzing {stock.ticker}…
-              </div>
-            )}
-            {aiText && <div style={{ whiteSpace: 'pre-wrap' }}>{aiText}</div>}
+
+              <button
+                onClick={() => setRefreshSeed(prev => prev + 1)}
+                disabled={insightLoading}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-brand text-white border border-brand/50 hover:bg-brand/80 rounded-md text-[10px] font-bold transition-all shadow-md shadow-brand/20 disabled:opacity-50"
+              >
+                <Zap className="w-3 h-3" />
+                {insightLoading ? 'Analyzing...' : 'Analyze'}
+              </button>
+            </div>
+
+            {/* AI Insights content area */}
+            <div className="flex-1 py-4 overflow-y-auto min-h-[220px]">
+              {insightLoading ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3 text-textSub text-xs">
+                  <RefreshCw className="w-6 h-6 text-brand animate-spin" />
+                  <span>AI Agent parsing telemetry...</span>
+                </div>
+              ) : parsedAi ? (
+                /* Beautiful parsed layout cards */
+                <div className="space-y-3">
+                  {parsedAi.map((item) => {
+                    let iconColor = 'text-brand'
+                    let IconComponent = HelpCircle
+                    let cardBorder = 'border-border/30'
+
+                    if (item.title === 'Valuation') {
+                      IconComponent = DollarSign
+                      iconColor = 'text-cyan'
+                    } else if (item.title === 'Momentum') {
+                      IconComponent = Compass
+                      iconColor = 'text-purple'
+                    } else if (item.title === 'Risk') {
+                      IconComponent = ShieldAlert
+                      iconColor = 'text-danger'
+                      cardBorder = 'border-danger/25 bg-danger/5'
+                    } else if (item.title === 'Verdict') {
+                      IconComponent = CheckCircle
+                      iconColor = 'text-success'
+                      cardBorder = 'border-success/25 bg-success/5'
+                    }
+
+                    return (
+                      <div 
+                        key={item.title} 
+                        className={`p-3 rounded-lg border bg-elevated/40 backdrop-blur-sm transition-all hover:scale-[1.01] ${cardBorder}`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <IconComponent className={`w-3.5 h-3.5 ${iconColor}`} />
+                          <span className={`text-[11px] font-bold uppercase tracking-wider ${iconColor}`}>
+                            {item.title}
+                          </span>
+                        </div>
+                        <p className="text-xs text-textPrimary leading-relaxed">
+                          {item.content}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                /* Raw fallback layout */
+                <div className="text-xs text-textPrimary leading-relaxed whitespace-pre-line font-mono bg-elevated/20 p-3 rounded-lg border border-border/30">
+                  {insight?.ai_summary || 'No AI insights have been compiled for this stock yet. Click analyze to trigger.'}
+                </div>
+              )}
+            </div>
+
+            {/* AI Disclaimer */}
+            <div className="text-[9px] text-textMuted border-t border-border/40 pt-3 flex items-start gap-1 font-mono uppercase">
+              <span className="text-warn font-bold">⚠️ Notice:</span>
+              <span>Educational snapshot only. No investment advice.</span>
+            </div>
+          </div>
+
+          {/* Factor metrics panel */}
+          <div className="glass border border-border/60 bg-card/40 rounded-xl p-5 shadow-lg space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-border/40">
+              <Target className="w-4 h-4 text-brand" />
+              <span className="text-xs font-bold text-textPrimary uppercase tracking-widest font-display">
+                Factor Strengths
+              </span>
+            </div>
+            
+            <div className="space-y-4.5">
+              {[
+                { name: 'Momentum', val: fundamentals?.factor_scores?.momentum },
+                { name: 'Quality', val: fundamentals?.factor_scores?.quality },
+                { name: 'Value', val: fundamentals?.factor_scores?.value },
+                { name: 'Growth', val: fundamentals?.factor_scores?.growth },
+                { name: 'Low Volatility', val: fundamentals?.factor_scores?.low_volatility },
+              ].map((f) => {
+                const hasScore = f.val !== null && f.val !== undefined
+                const scoreDisplay = hasScore ? `${Math.round(f.val)}/100` : 'N/A'
+                const progressWidth = hasScore ? `${f.val}%` : '0%'
+                const barColor = hasScore ? scoreColor(f.val) : '#475569'
+
+                return (
+                  <div key={f.name} className="space-y-1.5 group">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-textSub font-medium group-hover:text-textPrimary transition-colors">
+                        {f.name}
+                      </span>
+                      <span 
+                        className="font-mono font-bold text-xs" 
+                        style={{ color: barColor }}
+                      >
+                        {scoreDisplay}
+                      </span>
+                    </div>
+                    {/* Progress track */}
+                    <div className="h-2 bg-elevated rounded-full overflow-hidden border border-border/40 p-0.5">
+                      <div 
+                        className="h-full rounded-full transition-all duration-1000 bg-gradient-to-r" 
+                        style={{ 
+                          width: progressWidth,
+                          backgroundImage: hasScore ? `linear-gradient(90deg, #f43f5e, ${barColor})` : 'none',
+                          backgroundColor: !hasScore ? '#475569' : undefined
+                        }} 
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   )
 }

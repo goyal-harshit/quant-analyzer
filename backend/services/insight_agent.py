@@ -25,10 +25,10 @@ class InsightAgent:
     def __init__(self):
         self._peer_cache = {}
 
-    async def _agent_quote(self, ticker: str) -> dict:
+    async def _agent_quote(self, ticker: str, refresh: bool = False) -> dict:
         """Agent 1: Fetch current quote — fastest path (seed data)."""
         try:
-            q = await data_service.get_quote(ticker)
+            q = await data_service.get_quote(ticker, refresh=refresh)
             if q and q.get("price"):
                 return q
         except Exception:
@@ -36,10 +36,10 @@ class InsightAgent:
         q = get_seed_quote(ticker)
         return q or {}
 
-    async def _agent_fundamentals(self, ticker: str) -> dict:
+    async def _agent_fundamentals(self, ticker: str, refresh: bool = False) -> dict:
         """Agent 2: Fetch fundamentals — from cache or seed."""
         try:
-            f = await data_service.get_fundamentals(ticker)
+            f = await data_service.get_fundamentals(ticker, refresh=refresh)
             if f:
                 return f
         except Exception:
@@ -47,10 +47,10 @@ class InsightAgent:
         f = get_seed_fundamentals(ticker)
         return f or {}
 
-    async def _agent_history(self, ticker: str, period: str = "2y") -> list:
+    async def _agent_history(self, ticker: str, period: str = "2y", refresh: bool = False) -> list:
         """Agent 3: Fetch price history."""
         try:
-            df = await data_service.get_price_history(ticker, period=period)
+            df = await data_service.get_price_history(ticker, period=period, refresh=refresh)
             if df is not None and not df.empty:
                 return [
                     {
@@ -67,15 +67,16 @@ class InsightAgent:
             pass
         return []
 
-    async def _agent_technicals(self, ticker: str) -> dict:
+    async def _agent_technicals(self, ticker: str, refresh: bool = False) -> dict:
         """Agent 4: Compute technical indicators from cached/gathered history."""
         cache_key = f"tech_{ticker.upper()}"
-        cached = await cache.get(cache_key)
-        if cached:
-            import json
-            return json.loads(cached)
+        if not refresh:
+            cached = await cache.get(cache_key)
+            if cached:
+                import json
+                return json.loads(cached)
 
-        df = await data_service.get_price_history(ticker, period="1y")
+        df = await data_service.get_price_history(ticker, period="1y", refresh=refresh)
         if df is None or df.empty or len(df) < 50:
             return {}
 
@@ -99,16 +100,17 @@ class InsightAgent:
         await cache.set(cache_key, json.dumps(result), TTL_PRICE_HISTORY)
         return result
 
-    async def _agent_factors(self, ticker: str) -> dict:
+    async def _agent_factors(self, ticker: str, refresh: bool = False) -> dict:
         """Agent 5: Compute factor scores with cached fallback."""
         cache_key = f"fs_{ticker.upper()}"
-        cached = await cache.get(cache_key)
-        if cached:
-            import json
-            return json.loads(cached)
+        if not refresh:
+            cached = await cache.get(cache_key)
+            if cached:
+                import json
+                return json.loads(cached)
 
-        prices_df = await data_service.get_price_history(ticker, period="2y")
-        fundamentals = await data_service.get_fundamentals(ticker)
+        prices_df = await data_service.get_price_history(ticker, period="2y", refresh=refresh)
+        fundamentals = await data_service.get_fundamentals(ticker, refresh=refresh)
         close_prices = prices_df["close"] if prices_df is not None and not prices_df.empty else None
 
         result = {
@@ -186,15 +188,15 @@ class InsightAgent:
             logger.warning(f"AI summary agent failed for {ticker}: {e}")
             return None
 
-    async def get_insight(self, ticker: str, include_ai: bool = False) -> dict:
+    async def get_insight(self, ticker: str, include_ai: bool = False, refresh: bool = False) -> dict:
         """Master coordinator — fans out to all agents in parallel, merges results."""
         t = ticker.upper()
         agents = {
-            "quote": self._agent_quote(t),
-            "fundamentals": self._agent_fundamentals(t),
-            "history": self._agent_history(t),
-            "technicals": self._agent_technicals(t),
-            "factors": self._agent_factors(t),
+            "quote": self._agent_quote(t, refresh=refresh),
+            "fundamentals": self._agent_fundamentals(t, refresh=refresh),
+            "history": self._agent_history(t, refresh=refresh),
+            "technicals": self._agent_technicals(t, refresh=refresh),
+            "factors": self._agent_factors(t, refresh=refresh),
         }
 
         results = await asyncio.gather(*agents.values(), return_exceptions=True)

@@ -43,14 +43,20 @@ class FastDataService:
         period_map = {"1mo": "1mo", "3mo": "3mo", "6mo": "6mo", "1y": "1y", "2y": "2y", "5y": "5y"}
         range_val = period_map.get(period, "1y")
 
+        formatted = ticker.upper()
+        if not (formatted.startswith("^") or "." in formatted):
+            formatted_ns = f"{formatted}.NS"
+        else:
+            formatted_ns = formatted
+
         data = await self._get(
-            f"{YAHOO_BASE}/v8/finance/chart/{ticker}.NS",
+            f"{YAHOO_BASE}/v8/finance/chart/{formatted_ns}",
             params={"interval": "1d", "range": range_val, "includePrePost": "false"}
         )
-        if not data:
+        if (not data or not data.get("chart", {}).get("result")) and not (formatted.startswith("^") or "." in formatted):
             # Try BSE
             data = await self._get(
-                f"{YAHOO_BASE}/v8/finance/chart/{ticker}.BO",
+                f"{YAHOO_BASE}/v8/finance/chart/{formatted}.BO",
                 params={"interval": "1d", "range": range_val, "includePrePost": "false"}
             )
         if not data or not data.get("chart", {}).get("result"):
@@ -74,19 +80,38 @@ class FastDataService:
     # ── LIVE QUOTE ────────────────────────────────────────────────
     async def get_quote(self, ticker: str) -> dict:
         """Fetch current quote from Yahoo Finance chart API (1d range)."""
+        formatted = ticker.upper()
+        if not (formatted.startswith("^") or "." in formatted):
+            formatted_ns = f"{formatted}.NS"
+        else:
+            formatted_ns = formatted
+
         data = await self._get(
-            f"{YAHOO_BASE}/v8/finance/chart/{ticker}.NS",
+            f"{YAHOO_BASE}/v8/finance/chart/{formatted_ns}",
             params={"interval": "1d", "range": "5d", "includePrePost": "false"}
         )
+        if (not data or not data.get("chart", {}).get("result")) and not (formatted.startswith("^") or "." in formatted):
+            # Try BSE
+            data = await self._get(
+                f"{YAHOO_BASE}/v8/finance/chart/{formatted}.BO",
+                params={"interval": "1d", "range": "5d", "includePrePost": "false"}
+            )
         if not data or not data.get("chart", {}).get("result"):
             return {}
 
         meta = data["chart"]["result"][0]["meta"]
+        price = meta.get("regularMarketPrice", 0)
+        prev_close = meta.get("chartPreviousClose", meta.get("previousClose", 0))
+        change = round(price - prev_close, 2) if price and prev_close else 0.0
+        change_pct = round((change / prev_close) * 100, 2) if change and prev_close else 0.0
+
         return {
             "ticker": ticker,
             "name": meta.get("shortName", meta.get("longName", ticker)),
-            "price": meta.get("regularMarketPrice", 0),
-            "prev_close": meta.get("chartPreviousClose", meta.get("previousClose", 0)),
+            "price": price,
+            "prev_close": prev_close,
+            "change": change,
+            "change_pct": change_pct,
             "open": meta.get("regularMarketDayOpen", 0),
             "day_high": meta.get("regularMarketDayHigh", 0),
             "day_low": meta.get("regularMarketDayLow", 0),
@@ -96,86 +121,111 @@ class FastDataService:
             "fifty_two_week_low": meta.get("fiftyTwoWeekLow", 0),
             "fifty_day_avg": meta.get("fiftyDayAverage", 0),
             "two_hundred_day_avg": meta.get("twoHundredDayAverage", 0),
-            "year_change_pct": meta.get("yearChange", 0) * 100,
+            "year_change_pct": meta.get("yearChange", 0) * 100 if meta.get("yearChange") else 0.0,
             "currency": meta.get("currency", "INR"),
             "exchange": meta.get("exchangeName", "NSE"),
         }
 
-    # ── FUNDAMENTALS (Screener.in primary, yfinance fallback) ─────
+    async def get_yahoo_quote_summary(self, ticker: str) -> dict:
+        """
+        Fetch fundamentals directly from Yahoo Finance quoteSummary API.
+        Free, direct, bypasses Ticker.info rate limits.
+        """
+        formatted = ticker.upper()
+        if not (formatted.startswith("^") or "." in formatted):
+            formatted_ns = f"{formatted}.NS"
+        else:
+            formatted_ns = formatted
+
+        modules = "summaryDetail,financialData,defaultKeyStatistics"
+        url = f"{YAHOO_BASE}/v10/finance/quoteSummary/{formatted_ns}"
+        
+        try:
+            data = await self._get(url, params={"modules": modules})
+            if not data or not data.get("quoteSummary", {}).get("result"):
+                if not (formatted.startswith("^") or "." in formatted):
+                    # Try BSE
+                    data = await self._get(
+                        f"{YAHOO_BASE}/v10/finance/quoteSummary/{formatted}.BO",
+                        params={"modules": modules}
+                    )
+            
+            if not data or not data.get("quoteSummary", {}).get("result"):
+                return {}
+                
+            res = data["quoteSummary"]["result"][0]
+            
+            summary_detail = res.get("summaryDetail", {})
+            financial_data = res.get("financialData", {})
+            key_stats = res.get("defaultKeyStatistics", {})
+            
+            def _val(obj, key):
+                val = obj.get(key, {})
+                if isinstance(val, dict):
+                    return val.get("raw")
+                return None
+                
+            def _pct_val(obj, key):
+                val = _val(obj, key)
+                if val is not None:
+                    return val * 100
+                return None
+
+            return {
+                "ticker": ticker,
+                "pe_ratio": _val(summary_detail, "trailingPE"),
+                "forward_pe": _val(summary_detail, "forwardPE"),
+                "pb_ratio": _val(key_stats, "priceToBook"),
+                "ps_ratio": _val(summary_detail, "priceToSalesTrailing12Months"),
+                "ev_ebitda": _val(key_stats, "enterpriseValToEbitda"),
+                "peg_ratio": _val(key_stats, "pegRatio"),
+                "roe": _pct_val(financial_data, "returnOnEquity"),
+                "roa": _pct_val(financial_data, "returnOnAssets"),
+                "gross_margin": _pct_val(financial_data, "grossMargins"),
+                "ebitda_margin": _pct_val(financial_data, "ebitdaMargins"),
+                "net_margin": _pct_val(financial_data, "profitMargins"),
+                "operating_margin": _pct_val(financial_data, "operatingMargins"),
+                "revenue_growth": _pct_val(financial_data, "revenueGrowth"),
+                "earnings_growth": _pct_val(financial_data, "earningsGrowth"),
+                "debt_equity": _val(financial_data, "debtToEquity"),
+                "current_ratio": _val(financial_data, "currentRatio"),
+                "free_cashflow": _val(financial_data, "freeCashflow"),
+                "beta": _val(key_stats, "beta"),
+                "dividend_yield": _pct_val(summary_detail, "dividendYield"),
+                "market_cap": _val(summary_detail, "marketCap") or _val(key_stats, "marketCap"),
+                "enterprise_value": _val(financial_data, "enterpriseValue"),
+                "book_value": _val(key_stats, "bookValue"),
+            }
+        except Exception as e:
+            logger.warning(f"Error fetching Yahoo quote summary for {ticker}: {e}")
+            return {}
+
+    # ── FUNDAMENTALS (Screener.in primary, Yahoo quoteSummary fallback) ─────
     async def get_fundamentals(self, ticker: str) -> dict:
         """
-        Fetch fundamental data — Screener.in first (free, reliable),
-        then yfinance as fallback (rate-limited).
+        Fetch fundamental data — Screener.in first (free, reliable, real), then
+        Yahoo quoteSummary (free, direct). The yfinance library fallback was
+        removed: from this environment Yahoo's library endpoints return 429 and
+        yfinance retries with backoff, which 429-storms and stalls batch screens.
         """
         # Try Screener.in first (free, no rate limiting)
         try:
             from services.screener_service import screener_service
             data = await screener_service.get_fundamentals(ticker)
             if data and (data.get("pe_ratio") or data.get("roe")):
-                logger.info(f"Screener.in fundamentals OK for {ticker}")
                 return data
         except Exception as e:
             logger.warning(f"Screener.in failed for {ticker}: {e}")
 
-        # Fallback: yfinance (may be rate-limited)
+        # Try direct Yahoo quoteSummary endpoint (free, direct)
         try:
-            import yfinance as yf
-
-            loop = asyncio.get_event_loop()
-
-            def fetch():
-                t = yf.Ticker(f"{ticker}.NS")
-                try:
-                    info = t.info
-                    if info and "trailingPE" in info:
-                        return info
-                except Exception:
-                    pass
-                return {}
-
-            info = await loop.run_in_executor(None, fetch)
-
-            if not info or "trailingPE" not in info:
-                return {}
-
-            def _pct(val):
-                if val is not None:
-                    try:
-                        return float(val) * 100
-                    except (ValueError, TypeError):
-                        return None
-                return None
-
-            return {
-                "ticker": ticker,
-                "sector": info.get("sector"),
-                "industry": info.get("industry"),
-                "pe_ratio": info.get("trailingPE"),
-                "forward_pe": info.get("forwardPE"),
-                "pb_ratio": info.get("priceToBook"),
-                "ps_ratio": info.get("priceToSalesTrailing12Months"),
-                "ev_ebitda": info.get("enterpriseToEbitda"),
-                "peg_ratio": info.get("pegRatio"),
-                "roe": _pct(info.get("returnOnEquity")),
-                "roa": _pct(info.get("returnOnAssets")),
-                "gross_margin": _pct(info.get("grossMargins")),
-                "ebitda_margin": _pct(info.get("ebitdaMargins")),
-                "net_margin": _pct(info.get("profitMargins")),
-                "operating_margin": _pct(info.get("operatingMargins")),
-                "revenue_growth": _pct(info.get("revenueGrowth")),
-                "earnings_growth": _pct(info.get("earningsGrowth")),
-                "debt_equity": info.get("debtToEquity"),
-                "current_ratio": info.get("currentRatio"),
-                "free_cashflow": info.get("freeCashflow"),
-                "beta": info.get("beta"),
-                "dividend_yield": _pct(info.get("dividendYield")),
-                "market_cap": info.get("marketCap"),
-                "enterprise_value": info.get("enterpriseValue"),
-                "book_value": info.get("bookValue"),
-            }
+            data = await self.get_yahoo_quote_summary(ticker)
+            if data and (data.get("pe_ratio") or data.get("roe")):
+                return data
         except Exception as e:
-            logger.warning(f"yfinance fundamentals failed for {ticker}: {e}")
-            return {}
+            logger.warning(f"Yahoo quoteSummary failed for {ticker}: {e}")
+
+        return {}
 
 
 # ── QUANT FACTOR COMPUTATION (single stock) ──────────────────────

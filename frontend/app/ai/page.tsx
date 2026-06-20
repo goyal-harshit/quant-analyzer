@@ -2,14 +2,20 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Send, MessageSquare, Cpu, RefreshCw } from 'lucide-react'
-import { STOCKS, MACRO, BT_STATS, T, pct } from '@/lib/stockData'
+import { T, pct } from '@/lib/stockData'
+import { aiApi } from '@/lib/api'
 
 const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
-const sc = v => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
 
-function Tag({ children, color = '#a78bfa' }) {
-  return <span style={{ background: `${color}22`, color, border: `1px solid ${color}44`, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{children}</span>
-}
+const OFFLINE_STOCKS = [
+  { ticker: 'RELIANCE', name: 'Reliance Industries', sector: 'Energy', price: 2847.5, chg: 1.24, pe: 24.5, pb: 2.1, roe: 15.2, composite: 71, qual: 78, mom: 67, val: 63, grw: 71 },
+  { ticker: 'HDFCBANK', name: 'HDFC Bank', sector: 'Banking', price: 1742.3, chg: 0.83, pe: 19.2, pb: 2.8, roe: 17.1, composite: 74, qual: 85, mom: 72, val: 76, grw: 74 },
+  { ticker: 'TCS', name: 'Tata Consultancy', sector: 'IT', price: 3912.5, chg: -0.45, pe: 28.7, pb: 12.4, roe: 47.2, composite: 58, qual: 92, mom: 61, val: 52, grw: 58 },
+  { ticker: 'INFY', name: 'Infosys Ltd', sector: 'IT', price: 1478.9, chg: -0.21, pe: 25.3, pb: 8.9, roe: 33.8, composite: 56, qual: 88, mom: 58, val: 60, grw: 56 },
+  { ticker: 'ICICIBANK', name: 'ICICI Bank', sector: 'Banking', price: 1089.8, chg: 2.17, pe: 17.8, pb: 2.9, roe: 17.9, composite: 79, qual: 82, mom: 81, val: 79, grw: 79 },
+  { ticker: 'BHARTIARTL', name: 'Bharti Airtel', sector: 'Telecom', price: 1621.3, chg: 1.89, pe: 65.2, pb: 5.8, roe: 9.2, composite: 82, qual: 72, mom: 89, val: 38, grw: 82 },
+  { ticker: 'SBIN', name: 'State Bank of India', sector: 'Banking', price: 795.6, chg: 3.12, pe: 11.2, pb: 1.5, roe: 14.2, composite: 71, qual: 71, mom: 73, val: 88, grw: 71 },
+]
 
 const QUICK = [
   'Analyze HDFC Bank vs ICICI Bank quality factors',
@@ -19,9 +25,13 @@ const QUICK = [
   'Nifty 50 sector rotation — current macro regime signal',
 ]
 
+function Tag({ children, color = '#a78bfa' }) {
+  return <span style={{ background: `${color}22`, color, border: `1px solid ${color}44`, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{children}</span>
+}
+
 function buildOfflineChatReply(q) {
   const ql = q.toLowerCase()
-  const mentioned = STOCKS.filter(s => ql.includes(s.ticker.toLowerCase()) || ql.includes(s.name.toLowerCase().split(' ')[0]))
+  const mentioned = OFFLINE_STOCKS.filter(s => ql.includes(s.ticker.toLowerCase()) || ql.includes(s.name.toLowerCase().split(' ')[0]))
   if (mentioned.length >= 2) {
     const [a, b] = mentioned
     return `Comparing ${a.ticker} vs ${b.ticker} on quantitative factors:\n\n${a.ticker}: Composite ${a.composite} (Quality ${a.qual}, Momentum ${a.mom}, Value ${a.val}) · ROE ${a.roe.toFixed(1)}% · P/E ${a.pe.toFixed(1)}x\n${b.ticker}: Composite ${b.composite} (Quality ${b.qual}, Momentum ${b.mom}, Value ${b.val}) · ROE ${b.roe.toFixed(1)}% · P/E ${b.pe.toFixed(1)}x\n\nOn this data, ${a.composite > b.composite ? a.ticker : b.ticker} screens higher on the blended composite factor, driven primarily by ${a.composite > b.composite ? (a.qual > a.mom ? 'Quality' : 'Momentum') : (b.qual > b.mom ? 'Quality' : 'Momentum')}.\n\n⚠️ Offline rule-based reply (Ollama not reachable). Self-host with Ollama for full LLM responses, free.`
@@ -31,10 +41,10 @@ function buildOfflineChatReply(q) {
     return `${s.name} (${s.ticker}) — quick data view:\nPrice ₹${s.price.toLocaleString('en-IN')} (${pct(s.chg)}) · Sector: ${s.sector}\nP/E ${s.pe.toFixed(1)}x · P/B ${s.pb.toFixed(1)}x · ROE ${s.roe.toFixed(1)}%\nFactor scores — Momentum ${s.mom} · Quality ${s.qual} · Value ${s.val} · Growth ${s.grw} · Composite ${s.composite}\n\nOpen the Screener or click this stock from the Dashboard for the full AI report.\n\n⚠️ Offline rule-based reply (Ollama not reachable).`
   }
   if (ql.includes('rbi') || ql.includes('repo') || ql.includes('rate')) {
-    return `RBI's repo rate currently stands at ${MACRO.repo[MACRO.repo.length - 1].v}%, down from 6.5% a year ago — an easing cycle. Historically, falling rates benefit rate-sensitive sectors: Banking, NBFC, Real Estate, and Auto (financing-driven demand). Check the Macro tab for the full repo rate and CPI trend charts.\n\n⚠️ Offline rule-based reply (Ollama not reachable).`
+    return `RBI's repo rate currently stands at 5.75%, down from 6.5% a year ago — an easing cycle. Historically, falling rates benefit rate-sensitive sectors: Banking, NBFC, Real Estate, and Auto (financing-driven demand). Check the Macro tab for the full repo rate and CPI trend charts.\n\n⚠️ Offline rule-based reply (Ollama not reachable).`
   }
   if (ql.includes('momentum')) {
-    return `Momentum investing ranks stocks by relative price strength over the trailing 12 months (skipping the most recent month to avoid short-term reversal). In the Indian market context, momentum has historically been one of the stronger factors — see the Backtester tab, where the "High Momentum" strategy shows a ${BT_STATS['High Momentum'].cagr}% CAGR vs ${BT_STATS['Nifty 50'].cagr}% for Nifty 50 over the same period.\n\n⚠️ Offline rule-based reply (Ollama not reachable).`
+    return `Momentum investing ranks stocks by relative price strength over the trailing 12 months (skipping the most recent month to avoid short-term reversal). In the Indian market context, momentum has historically been one of the stronger factors — see the Backtester tab, where the "High Momentum" strategy shows a 22.5% CAGR vs 16.2% for Nifty 50 over the same period.\n\n⚠️ Offline rule-based reply (Ollama not reachable).`
   }
   return `I can discuss specific Nifty stocks (try mentioning a ticker like "HDFCBANK" or "TCS"), RBI policy, or factor investing concepts. Try one of the quick prompts below, or ask about a specific stock or sector.\n\n⚠️ This is an offline rule-based reply because Ollama isn't reachable from this preview. Run this app on your own device with \`ollama serve\` running for full open-source LLM responses — completely free, no API key.`
 }
@@ -60,13 +70,7 @@ export default function AIChat() {
     setLoad(true)
     try {
       const apiMsgs = next.filter((m, i) => !(m.role === 'assistant' && i === 0)).map(m => ({ role: m.role, content: m.content }))
-      const res = await fetch('/api/v1/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMsgs }),
-      })
-      if (!res.ok) throw new Error('API unreachable')
-      const d = await res.json()
+      const d = await aiApi.chat({ messages: apiMsgs })
       setMsgs(p => [...p, { role: 'assistant', content: d.response || d.content, source: 'ollama' }])
     } catch {
       setMsgs(p => [...p, { role: 'assistant', content: buildOfflineChatReply(q), source: 'offline' }])

@@ -1,39 +1,62 @@
+// /frontend/components/layout/LayoutShell.tsx
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import Sidebar from './Sidebar'
-import { T } from '@/lib/stockData'
+import Header from './Header'
+import { usePathname } from 'next/navigation'
+import CommandPalette from '../ui/CommandPalette'
 
-export default function LayoutShell({ children }: { children: React.ReactNode }) {
+interface LayoutShellProps {
+  children: React.ReactNode
+}
+
+export default function LayoutShell({ children }: LayoutShellProps) {
+  const [collapsed, setCollapsed] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const pathname = usePathname()
-  const isAuthPage = pathname === '/login' || pathname === '/register'
+  const isStandalonePage = pathname === '/login' || pathname === '/register' || pathname === '/'
 
-  if (isAuthPage) {
-    return (
-      <div style={{
-        minHeight: '100vh', background: T.bg, color: T.text,
-        fontFamily: T.sans, display: 'flex', flexDirection: 'column',
-        justifyContent: 'center',
-      }}>
-        {children}
-      </div>
-    )
+  // Global Ctrl+K handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  if (isStandalonePage) {
+    return <div className="min-h-screen bg-bg">{children}</div>
   }
 
+  const sidebarWidth = collapsed ? '64px' : '224px'
+
   return (
-    <div style={{ display: 'flex', background: T.bg, minHeight: '100vh', color: T.text, fontFamily: T.sans }}>
-      <style>{`
-        *{box-sizing:border-box;margin:0;padding:0;}
-        ::-webkit-scrollbar{width:5px;height:5px;}
-        ::-webkit-scrollbar-track{background:${T.bg};}
-        ::-webkit-scrollbar-thumb{background:${T.b};border-radius:3px;}
-        select option{background:${T.el};}
-        @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-      `}</style>
-      <Sidebar />
-      <main style={{ marginLeft: 215, flex: 1, overflowY: 'auto', minHeight: '100vh' }}>
-        {children}
-      </main>
+    <div className="min-h-screen bg-bg flex">
+      {/* Sidebar */}
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
+
+      {/* Main */}
+      <div
+        className="flex-1 flex flex-col min-h-screen transition-all duration-300"
+        style={{ marginLeft: sidebarWidth }}
+      >
+        <Header onSearchClick={() => setSearchOpen(true)} />
+        <main
+          className="flex-1 overflow-auto"
+          style={{ paddingTop: '64px' }} // header height
+        >
+          <div className="max-w-[1440px] mx-auto p-4 md:p-8 flex flex-col gap-6">
+            {children}
+          </div>
+        </main>
+      </div>
+
+      <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   )
 }
