@@ -1,20 +1,21 @@
 /* /frontend/app/globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Fonts are loaded via <link rel="preconnect"/preconnect + stylesheet> in
+   app/layout.tsx (head) instead of a render-blocking CSS @import. */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* BACKGROUNDS — strict hierarchy */
-  --bg:          #010810;   /* page background */
-  --card:        #080f1e;   /* card surface */
-  --elevated:    #0c1526;   /* elevated card / dropdown */
+  /* BACKGROUNDS — strict hierarchy (single source of truth, matches lib/stockData.ts T tokens) */
+  --bg:          #030712;   /* page background  (T.bg) */
+  --card:        #0a1020;   /* card surface     (T.card) */
+  --elevated:    #0f182e;   /* elevated card    (T.el) */
   --overlay:     #111d35;   /* modal overlay inner */
 
   /* BORDERS */
-  --border:      #162034;   /* default border */
-  --border-hi:   #1f3055;   /* hover / emphasis border */
+  --border:      #1e2d4a;   /* default border   (T.b) */
+  --border-hi:   #2a3f6a;   /* hover / emphasis (T.bhi) */
   --border-focus:#3b82f6;   /* focus ring */
 
   /* BRAND COLORS */
@@ -216,6 +217,11 @@ body {
   to   { opacity: 1; transform: translateY(0);   }
 }
 .animate-in { animation: fadeInUp 0.2s ease-out forwards; }
+
+/* Spin — referenced by inline `animation: spin ...` (e.g. AI page loader). */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after { animation-duration: 0.01ms !important; }

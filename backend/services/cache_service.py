@@ -3,8 +3,10 @@ cache_service.py — Redis-backed caching with in-memory fallback.
 Cache-aside pattern: get_or_compute checks cache first, calls compute_func on miss.
 Gracefully degrades when Redis is unavailable.
 """
+import asyncio
 import json
 import logging
+import time
 from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
@@ -50,7 +52,15 @@ class CacheService:
                 return await self._redis.get(key)
             except Exception:
                 pass
-        return self._in_memory.get(key)
+        # In-memory fallback with TTL enforcement (value, expires_at).
+        entry = self._in_memory.get(key)
+        if entry is None:
+            return None
+        value, expires_at = entry
+        if expires_at is not None and time.monotonic() > expires_at:
+            self._in_memory.pop(key, None)
+            return None
+        return value
 
     async def set(self, key: str, value: str, ttl: int = 300):
         if self._redis is None:
@@ -61,13 +71,20 @@ class CacheService:
                 return
             except Exception:
                 pass
-        self._in_memory[key] = value
+        # Bound the in-memory fallback so it can't grow unbounded.
+        if len(self._in_memory) > 5000:
+            self._in_memory.clear()
+        self._in_memory[key] = (value, (time.monotonic() + ttl) if ttl else None)
 
     async def get_or_compute(self, key: str, ttl: int, compute_func: Callable[[], Any]) -> str:
         cached = await self.get(key)
         if cached is not None:
             return cached
-        result = await compute_func() if hasattr(compute_func, "__await__") else compute_func()
+        # Correctly detect coroutine functions (the old hasattr(__await__) check
+        # was always False for an async def and silently never awaited).
+        result = compute_func()
+        if asyncio.iscoroutine(result):
+            result = await result
         if isinstance(result, (dict, list)):
             result_str = json.dumps(result)
         else:

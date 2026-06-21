@@ -113,7 +113,7 @@ async def backtest_strategy(request: StrategyRequest):
 
     result = {
         "strategy_name": request.name,
-        "rules_applied": [r.dict() for r in request.rules],
+        "rules_applied": [r.model_dump() for r in request.rules],
         "weights_used": weights,
         "top_holdings": [{"ticker": t, "score": round(float(top[t]), 2)} for t in top.index],
         "universe_size": len(filtered),

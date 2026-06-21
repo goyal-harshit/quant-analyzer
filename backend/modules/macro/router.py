@@ -1,9 +1,15 @@
 """Macro Router — India macroeconomic indicators"""
 
+import asyncio
+import json
+
 from fastapi import APIRouter
-from services.data_service import data_service
+from services.data_service import data_service, _get_redis
 
 router = APIRouter()
+
+_MACRO_CACHE_KEY = "macro:dashboard:v1"
+_MACRO_TTL = 600  # 10 min — macro series move slowly
 
 
 @router.get("", response_model=dict)
@@ -11,14 +17,41 @@ async def get_macro_dashboard(refresh: bool = False):
     """
     Get full macro dashboard: repo rate, CPI, GDP, USD/INR, FII/DII flows.
     Live sources: World Bank (CPI/GDP), Yahoo (USD/INR), NSE (FII/DII).
+    Sources are fetched concurrently AND individually bounded, so one slow source
+    (e.g. NSE FII/DII, which blocks datacenter IPs) can't stall the dashboard past
+    ~6s; the assembled response is cached so repeat loads are instant.
     """
-    repo = await data_service.get_repo_rate_history(refresh=refresh)
-    cpi = await data_service.get_cpi_history(refresh=refresh)
-    gdp = await data_service.get_gdp_growth_history(refresh=refresh)
-    usd_inr = await data_service.get_usd_inr_history(days=180, refresh=refresh)
-    flows = await data_service.get_fii_dii_flows(refresh=refresh)
+    if not refresh:
+        try:
+            r = await _get_redis()
+            if r:
+                cached = await r.get(_MACRO_CACHE_KEY)
+                if cached:
+                    return json.loads(cached)
+        except Exception:
+            pass
 
-    return {
+    async def _bounded(coro, timeout: float = 6.0):
+        """Cap any single source; on timeout/failure that source degrades to empty."""
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout)
+        except Exception:
+            return None
+
+    repo, cpi, gdp, usd_inr, flows = await asyncio.gather(
+        _bounded(data_service.get_repo_rate_history(refresh=refresh)),
+        _bounded(data_service.get_cpi_history(refresh=refresh)),
+        _bounded(data_service.get_gdp_growth_history(refresh=refresh)),
+        _bounded(data_service.get_usd_inr_history(days=180, refresh=refresh)),
+        _bounded(data_service.get_fii_dii_flows(refresh=refresh)),
+    )
+    repo = repo if isinstance(repo, list) else []
+    cpi = cpi if isinstance(cpi, list) else []
+    gdp = gdp if isinstance(gdp, list) else []
+    usd_inr = usd_inr if isinstance(usd_inr, list) else []
+    flows = flows if isinstance(flows, dict) else {}
+
+    result = {
         "repo_rate": repo,
         "cpi": cpi,
         "gdp_growth": gdp,
@@ -33,6 +66,14 @@ async def get_macro_dashboard(refresh: bool = False):
             {"name": "USD/INR", "value": usd_inr[-1]["value"] if usd_inr else None, "unit": "₹", "source": "Yahoo (live)"},
         ],
     }
+
+    try:
+        r = await _get_redis()
+        if r:
+            await r.setex(_MACRO_CACHE_KEY, _MACRO_TTL, json.dumps(result))
+    except Exception:
+        pass
+    return result
 
 
 @router.get("/regime")

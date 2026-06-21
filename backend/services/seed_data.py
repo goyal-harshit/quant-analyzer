@@ -78,7 +78,6 @@ STOCK_MASTER = [
     ("ZOMATO", "Zomato Ltd", "Consumer", 198.5, -45.2, 8.5, -2.5, 52.8, 92, 28, 18, 95, 18500),
     ("PAYTM", "One 97 Communications", "Consumer", 524.8, -28.5, 4.2, -8.5, 38.5, 54, 22, 32, 78, 4200),
     ("NYKAA", "FSN E-Commerce", "Consumer", 185.6, -52.4, 6.8, -4.2, 45.2, 62, 32, 28, 88, 5800),
-    ("AVENUE", "Avenue Supermarts", "Consumer", 4125.6, 85.4, 18.5, 24.8, 18.5, 68, 84, 24, 72, 26800),
     ("IDEA", "Vodafone Idea", "Telecom", 14.8, -8.5, 0.5, -12.5, 8.5, 28, 15, 42, 32, 6800),
     ("INDUSTOWER", "Indus Towers", "Telecom", 345.8, 28.5, 4.8, 18.5, 12.8, 55, 62, 58, 56, 11300),
     ("SIEMENS", "Siemens India", "Capital Goods", 6254.8, 48.5, 8.5, 18.2, 14.5, 62, 76, 42, 62, 22500),
@@ -86,33 +85,33 @@ STOCK_MASTER = [
     ("HAVELLS", "Havells India", "Capital Goods", 1785.6, 52.8, 9.8, 22.5, 16.8, 64, 78, 42, 66, 11200),
     ("ABB", "ABB India", "Capital Goods", 5678.4, 58.6, 12.5, 24.8, 18.5, 68, 80, 38, 68, 10800),
     ("CUMMINS", "Cummins India", "Capital Goods", 3245.8, 42.5, 7.8, 26.4, 15.2, 58, 76, 48, 62, 9200),
-    ("ULTRACEMCO", "UltraTech Cement", "Others", 10568.5, 38.5, 4.8, 14.2, 11.5, 55, 68, 58, 58, 36200),
-    ("GRASIM", "Grasim Industries", "Others", 2485.6, 28.5, 2.8, 12.5, 14.8, 52, 62, 65, 61, 21800),
-    ("JSWSTEEL", "JSW Steel", "Others", 875.6, 15.8, 2.5, 18.5, 22.4, 72, 62, 72, 74, 28400),
-    ("TATASTEEL", "Tata Steel", "Others", 165.8, 12.5, 1.8, 16.8, 18.5, 62, 58, 78, 68, 25200),
-    ("HINDALCO", "Hindalco Industries", "Others", 625.8, 14.8, 2.2, 17.5, 20.5, 65, 60, 74, 70, 18600),
-    ("VEDANTA", "Vedanta Ltd", "Others", 428.6, 10.5, 1.5, 22.4, 25.8, 74, 55, 82, 76, 12200),
-    ("INDUSINDBK", "IndusInd Bank", "Others", 1456.8, 18.5, 2.5, 15.8, 19.5, 62, 68, 72, 68, 15200),
-    ("SHRIRAMFIN", "Shriram Finance", "Others", 3245.8, 22.5, 3.2, 16.8, 18.5, 58, 65, 65, 64, 9800),
-    ("DLF", "DLF Ltd", "Others", 865.4, 35.8, 4.5, 12.5, 22.8, 72, 52, 52, 74, 24500),
-    ("GODREJPROP", "Godrej Properties", "Others", 2584.6, 42.5, 5.2, 14.8, 28.5, 76, 56, 48, 78, 6800),
-    ("ADANIPORTS", "Adani Ports", "Others", 1425.8, 32.5, 4.8, 16.5, 18.5, 68, 64, 58, 65, 32100),
-    ("PNB", "Punjab National Bank", "Others", 125.6, 8.5, 0.8, 12.5, 16.8, 52, 45, 82, 58, 18900),
-    ("CANBK", "Canara Bank", "Others", 425.8, 7.8, 1.2, 16.5, 19.2, 58, 52, 85, 62, 15200),
-    ("UNIONBANK", "Union Bank of India", "Others", 145.6, 9.5, 1.1, 14.8, 17.5, 54, 48, 80, 60, 10800),
-    ("HDFCLIFE", "HDFC Life Insurance", "Others", 685.8, 65.8, 12.5, 18.5, 14.8, 56, 72, 32, 58, 14200),
-    ("SBILIFE", "SBI Life Insurance", "Others", 1568.4, 72.5, 14.8, 20.5, 16.8, 62, 74, 28, 62, 12400),
-    ("ICICIPRULI", "ICICI Prudential Life", "Others", 625.8, 58.6, 10.5, 16.8, 12.5, 48, 68, 36, 54, 10200),
-    ("APOLLOHOSP", "Apollo Hospitals", "Others", 6234.8, 68.5, 12.8, 18.5, 15.8, 62, 76, 32, 64, 28400),
-    ("TATACONSUM", "Tata Consumer Products", "Others", 1125.6, 52.8, 8.5, 16.2, 14.5, 54, 72, 42, 58, 10800),
+    ("ULTRACEMCO", "UltraTech Cement", "Infrastructure", 10568.5, 38.5, 4.8, 14.2, 11.5, 55, 68, 58, 58, 36200),
+    ("GRASIM", "Grasim Industries", "Infrastructure", 2485.6, 28.5, 2.8, 12.5, 14.8, 52, 62, 65, 61, 21800),
+    ("JSWSTEEL", "JSW Steel", "Metals", 875.6, 15.8, 2.5, 18.5, 22.4, 72, 62, 72, 74, 28400),
+    ("TATASTEEL", "Tata Steel", "Metals", 165.8, 12.5, 1.8, 16.8, 18.5, 62, 58, 78, 68, 25200),
+    ("HINDALCO", "Hindalco Industries", "Metals", 625.8, 14.8, 2.2, 17.5, 20.5, 65, 60, 74, 70, 18600),
+    ("VEDANTA", "Vedanta Ltd", "Metals", 428.6, 10.5, 1.5, 22.4, 25.8, 74, 55, 82, 76, 12200),
+    ("INDUSINDBK", "IndusInd Bank", "Banking", 1456.8, 18.5, 2.5, 15.8, 19.5, 62, 68, 72, 68, 15200),
+    ("SHRIRAMFIN", "Shriram Finance", "NBFC", 3245.8, 22.5, 3.2, 16.8, 18.5, 58, 65, 65, 64, 9800),
+    ("DLF", "DLF Ltd", "Real Estate", 865.4, 35.8, 4.5, 12.5, 22.8, 72, 52, 52, 74, 24500),
+    ("GODREJPROP", "Godrej Properties", "Real Estate", 2584.6, 42.5, 5.2, 14.8, 28.5, 76, 56, 48, 78, 6800),
+    ("ADANIPORTS", "Adani Ports", "Infrastructure", 1425.8, 32.5, 4.8, 16.5, 18.5, 68, 64, 58, 65, 32100),
+    ("PNB", "Punjab National Bank", "Banking", 125.6, 8.5, 0.8, 12.5, 16.8, 52, 45, 82, 58, 18900),
+    ("CANBK", "Canara Bank", "Banking", 425.8, 7.8, 1.2, 16.5, 19.2, 58, 52, 85, 62, 15200),
+    ("UNIONBANK", "Union Bank of India", "Banking", 145.6, 9.5, 1.1, 14.8, 17.5, 54, 48, 80, 60, 10800),
+    ("HDFCLIFE", "HDFC Life Insurance", "Insurance", 685.8, 65.8, 12.5, 18.5, 14.8, 56, 72, 32, 58, 14200),
+    ("SBILIFE", "SBI Life Insurance", "Insurance", 1568.4, 72.5, 14.8, 20.5, 16.8, 62, 74, 28, 62, 12400),
+    ("ICICIPRULI", "ICICI Prudential Life", "Insurance", 625.8, 58.6, 10.5, 16.8, 12.5, 48, 68, 36, 54, 10200),
+    ("APOLLOHOSP", "Apollo Hospitals", "Healthcare", 6234.8, 68.5, 12.8, 18.5, 15.8, 62, 76, 32, 64, 28400),
+    ("TATACONSUM", "Tata Consumer Products", "FMCG", 1125.6, 52.8, 8.5, 16.2, 14.5, 54, 72, 42, 58, 10800),
     ("COFORGE", "Coforge", "IT", 6245.8, 32.5, 8.5, 26.8, 16.5, 62, 78, 48, 64, 7200),
     ("HEXAWARE", "Hexaware Technologies", "IT", 856.4, 24.5, 5.2, 22.4, 11.8, 52, 72, 56, 54, 4800),
     ("ZENSAR", "Zensar Technologies", "IT", 624.8, 20.5, 4.2, 18.5, 9.8, 44, 68, 58, 48, 3500),
     ("HALDYNAT", "Haldyn Glass", "FMCG", 452.6, 18.5, 2.8, 12.5, 15.8, 48, 48, 62, 56, 1200),
     ("TATACOMM", "Tata Communications", "Telecom", 1845.6, 28.5, 3.8, 14.5, 12.8, 52, 62, 58, 56, 5400),
     ("THERMAX", "Thermax Ltd", "Capital Goods", 4258.6, 52.8, 8.5, 18.5, 16.8, 62, 74, 42, 62, 4800),
-    ("BANKBARODA", "Bank of Baroda", "Others", 265.8, 8.5, 1.4, 17.5, 18.5, 58, 54, 84, 63, 16800),
-    ("INDIANB", "Indian Bank", "Others", 485.6, 9.5, 1.5, 15.8, 16.5, 52, 50, 80, 58, 7200),
+    ("BANKBARODA", "Bank of Baroda", "Banking", 265.8, 8.5, 1.4, 17.5, 18.5, 58, 54, 84, 63, 16800),
+    ("INDIANB", "Indian Bank", "Banking", 485.6, 9.5, 1.5, 15.8, 16.5, 52, 50, 80, 58, 7200),
 ]
 
 
@@ -159,7 +158,7 @@ EXTRA_STOCKS = [
     ('VEDL','Vedanta','Metals'),('VOLTAS','Voltas','Consumer'),
     ('WHIRLPOOL','Whirlpool India','Consumer'),('ZEEL','Zee Entertainment','Media'),
     ('ZOMATO','Zomato','IT'),('PAYTM','One97 Communications','IT'),
-    ('NYTAA','FSN E-Commerce','Retail'),('AARTIIND','Aarti Industries','Chemicals'),
+    ('AARTIIND','Aarti Industries','Chemicals'),
     ('ABFRL','Aditya Birla Fashion','Retail'),('ALOKINDS','Alok Industries','Textiles'),
     ('ANGELONE','Angel One','Financial Services'),('APLLTD','Alembic Pharma','Pharma'),
     ('ASTERDM','Aster DM Healthcare','Healthcare'),('ASTRAL','Astral Ltd','Infrastructure'),
@@ -725,9 +724,14 @@ EXTRA_STOCKS = [
 
 
 # ── Deduplicated merged universe ──────────────────────────────────────
+# STOCK_MASTER holds rich 13-field entries (price/PE/mcap/...); EXTRA_STOCKS are
+# light 3-field (ticker/name/sector). Insert MASTER first and only add EXTRA for
+# tickers not already present, so the richer entries are never overwritten.
 _STOCK_MAP: dict[str, tuple] = {}
-for _s in STOCK_MASTER + EXTRA_STOCKS:
+for _s in STOCK_MASTER:
     _STOCK_MAP[_s[0]] = _s
+for _s in EXTRA_STOCKS:
+    _STOCK_MAP.setdefault(_s[0], _s)
 ALL_STOCKS = list(_STOCK_MAP.values())
 DEFAULT_TICKERS = [s[0] for s in ALL_STOCKS]
 

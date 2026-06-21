@@ -9,14 +9,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 
 const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
-const sc = v => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
+const sc = (v: number) => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
 
-function Badge({ v }) {
+function Badge({ v }: { v: any }) {
   const c = sc(v)
   return <span style={{ background: `${c}22`, color: c, border: `1px solid ${c}44`, borderRadius: 4, padding: '2px 9px', fontSize: 12, fontFamily: T.mono, fontWeight: 700 }}>{v}</span>
 }
 
-function Tag({ children, color = '#a78bfa' }) {
+function Tag({ children, color = '#a78bfa' }: { children: any; color?: string }) {
   return <span style={{ background: `${color}22`, color, border: `1px solid ${color}44`, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{children}</span>
 }
 
@@ -38,7 +38,7 @@ function CT({ active, payload, label }: { active?: any; payload?: any; label?: a
   return (
     <div style={{ background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
       <div style={{ color: T.muted, marginBottom: 4 }}>{label}</div>
-      {payload.map((p, i) => (
+      {payload.map((p: any, i: number) => (
         <div key={i} style={{ color: p.color || T.text, fontFamily: T.mono }}>
           {p.name}: {typeof p.value === 'number' ? p.value.toFixed(1) : p.value}%
         </div>
@@ -56,6 +56,9 @@ export default function Portfolio() {
   const createPortfolio = useCreatePortfolio()
   const addPosition = useAddPosition()
   const removePosition = useRemovePosition()
+  // Must be called unconditionally with the other hooks (before any early return)
+  // to satisfy the Rules of Hooks.
+  const { data: perfData } = usePortfolioPerformance(selId || 0, 'NIFTY50', '1y', refreshSeed)
   const [showAdd, setShowAdd] = useState(false)
   const [addTicker, setAddTicker] = useState('')
   const [addQty, setAddQty] = useState('')
@@ -66,6 +69,14 @@ export default function Portfolio() {
       setSelId(portfolios[0].id)
     }
   }, [portfolios, selId])
+
+  // Close the Add-Position modal on Escape.
+  useEffect(() => {
+    if (!showAdd) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowAdd(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showAdd])
 
   const creating = createPortfolio.isPending
   const adding = addPosition.isPending
@@ -148,13 +159,12 @@ export default function Portfolio() {
     )
   }
 
-  const { data: perfData } = usePortfolioPerformance(selId || 0, 'NIFTY50', '1y', refreshSeed)
   const positions = portfolio.positions || []
   const totVal = portfolio.total_value || 0
   const totCst = portfolio.total_cost || 0
   const totPnl = portfolio.total_pnl || 0
   const COLS = [T.blue, T.green, T.amber, '#a78bfa', T.red]
-  const pie = positions.map((p, i) => ({ name: p.ticker, v: p.current_value || 0, c: COLS[i % COLS.length] }))
+  const pie = positions.map((p: any, i: number) => ({ name: p.ticker, v: p.current_value || 0, c: COLS[i % COLS.length] }))
   const portPts = perfData?.performance?.map((x: any) => ({ d: x.date, v: x.portfolio, b: x.benchmark })) || []
 
   return (
@@ -232,12 +242,12 @@ export default function Portfolio() {
               <ResponsiveContainer width="100%" height={150}>
                 <PieChart>
                   <Pie cx="50%" cy="50%" innerRadius={42} outerRadius={65} dataKey="v" data={pie} paddingAngle={3}>
-                    {pie.map((e, i) => <Cell key={i} fill={e.c} />)}
+                    {pie.map((e: any, i: number) => <Cell key={i} fill={e.c} />)}
                   </Pie>
                   <Tooltip formatter={(v: any) => [fI(typeof v === 'number' ? v : 0), 'Value']} />
                 </PieChart>
               </ResponsiveContainer>
-              {pie.map((d, i) => (
+              {pie.map((d: any, i: number) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 5 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: d.c, flexShrink: 0 }} />
                   <span style={{ fontSize: 11, fontFamily: T.mono, color: T.sub }}>{d.name}</span>
@@ -274,7 +284,7 @@ export default function Portfolio() {
               </tr>
             </thead>
             <tbody>
-              {positions.map((p, i) => (
+              {positions.map((p: any, i: number) => (
                 <tr key={p.id} style={{ borderBottom: `1px solid ${T.b}`, background: i % 2 === 0 ? 'transparent' : `${T.el}55` }}>
                   <td style={{ padding: '11px 15px', fontFamily: T.mono, fontWeight: 700, fontSize: 12, color: T.text }}>{p.ticker}</td>
                   <td style={{ padding: '11px 15px' }}><Tag>{p.sector || 'N/A'}</Tag></td>
@@ -336,10 +346,13 @@ export default function Portfolio() {
           onClick={() => setShowAdd(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-position-title"
             style={card({ padding: '24px', width: 380, maxWidth: '90vw' })}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 18 }}>Add Position</div>
+            <div id="add-position-title" style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 18 }}>Add Position</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 10, color: T.muted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ticker</div>

@@ -23,6 +23,26 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
   const [searching, setSearching] = useState(false)
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  // Keep keyboard focus inside the dialog while it's open (focus trap).
+  const handleTrapKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab') return
+    const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    if (!focusables || focusables.length === 0) return
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    const active = document.activeElement
+    if (e.shiftKey && active === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -97,9 +117,14 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-bg/80 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div 
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Stock search"
         className="w-full max-w-lg glass-elevated rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleTrapKeyDown}
       >
         {/* Search header */}
         <div className="flex items-center px-4 border-b border-border">

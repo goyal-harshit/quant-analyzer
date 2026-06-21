@@ -7,10 +7,9 @@ from models.database import Base, engine, AsyncSessionLocal
 
 @pytest.fixture(scope="session")
 def event_loop():
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
+    # Always create a fresh loop for the test session — asyncio.get_event_loop()
+    # is deprecated outside a running loop and warns/breaks on 3.12+.
+    loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 

@@ -3,6 +3,7 @@ auth_service.py — Authentication services
 Provides password hashing (bcrypt) and JWT token generation/verification.
 """
 
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -15,12 +16,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db, User
 
+logger = logging.getLogger(__name__)
+
 # Secret keys and algorithms
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-to-a-random-secret-in-production")
+_DEFAULT_SECRET = "change-this-to-a-random-secret-in-production"
+
+
+def _load_secret() -> str:
+    """Use JWT_SECRET_KEY if set to a real value; otherwise generate and persist a
+    random secret so tokens are never signed with the publicly-known default."""
+    env = os.getenv("JWT_SECRET_KEY")
+    if env and env != _DEFAULT_SECRET:
+        return env
+    import secrets
+    import pathlib
+    path = pathlib.Path(__file__).resolve().parent.parent / ".jwt_secret"
+    try:
+        if path.exists():
+            existing = path.read_text().strip()
+            if existing:
+                return existing
+        generated = secrets.token_urlsafe(48)
+        path.write_text(generated)
+        logger.warning("JWT_SECRET_KEY not set — generated a persistent random secret at %s", path)
+        return generated
+    except Exception:
+        return secrets.token_urlsafe(48)
+
+
+SECRET_KEY = _load_secret()
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+# auto_error=False → endpoints that work for both guests and logged-in users.
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -73,3 +103,25 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return user
+
+
+async def get_optional_user(
+    token: Optional[str] = Depends(optional_oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Like get_current_user but returns None instead of 401 when no/invalid token.
+    Lets a route serve guests (anonymous, id-scoped data) and logged-in users alike."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if not email:
+            return None
+    except JWTError:
+        return None
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user and user.is_active:
+        return user
+    return None

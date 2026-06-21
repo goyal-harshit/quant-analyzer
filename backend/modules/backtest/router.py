@@ -127,11 +127,22 @@ async def run_backtest(request: BacktestRequest):
         volatility_ann=round(float(port_returns.std() * np.sqrt(4 if rebal_freq=='QE' else 12) * 100), 2) if len(port_returns) > 1 else 0,
     )
 
+    # Per-rebalance period returns (period-over-period % change of the equity curve).
+    monthly_returns = []
+    for i in range(1, len(equity_curve)):
+        prev_v = equity_curve[i - 1].portfolio_value
+        cur_v = equity_curve[i].portfolio_value
+        if prev_v:
+            monthly_returns.append({
+                "date": equity_curve[i].date,
+                "return": round((cur_v / prev_v - 1) * 100, 2),
+            })
+
     return BacktestResponse(
         request=request,
         metrics=metrics,
         equity_curve=equity_curve,
-        monthly_returns=[],
+        monthly_returns=monthly_returns,
         top_holdings_last=[{"ticker": t} for t in list(prev_holdings)[:10]],
         turnover_avg=round(float(np.mean(turnovers)) * 100, 1) if turnovers else 0,
     )

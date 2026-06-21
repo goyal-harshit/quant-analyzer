@@ -9,7 +9,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v
 
 const client = axios.create({
   baseURL: API_BASE,
-  timeout: 120000,
+  // 45s is plenty for data/quote calls. Long-running LLM calls pass a per-request
+  // override where needed rather than making every request wait up to 2 minutes.
+  timeout: 45000,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -23,6 +25,24 @@ client.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// On 401, if we HAD a token it's expired/invalid — clear it and bounce to login.
+// (A 401 with no token is just a guest hitting a protected route; let the page handle it.)
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (typeof window !== "undefined" && error?.response?.status === 401) {
+      const hadToken = !!localStorage.getItem("token");
+      if (hadToken) {
+        localStorage.removeItem("token");
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // ── TYPES ───────────────────────────────────────────────────────
 export interface StockQuote {
@@ -188,27 +208,30 @@ export const macroApi = {
 };
 
 // ── AI ──────────────────────────────────────────────────────────
+// LLM generation can be slow on self-hosted Ollama — give AI calls a longer timeout.
+const AI_TIMEOUT = { timeout: 120000 };
+
 export const aiApi = {
   chat: (data: { messages: Array<{ role: string; content: string }>; context_ticker?: string; provider?: string; model?: string; api_key?: string }) =>
-    client.post("/ai/chat", data).then((r) => r.data),
+    client.post("/ai/chat", data, AI_TIMEOUT).then((r) => r.data),
 
   generateReport: (ticker: string, reportType = "full") =>
-    client.post(`/ai/report/${ticker}`, { ticker, report_type: reportType }).then((r) => r.data),
+    client.post(`/ai/report/${ticker}`, { ticker, report_type: reportType }, AI_TIMEOUT).then((r) => r.data),
 
   generateThesis: (ticker: string) =>
-    client.post(`/ai/thesis/${ticker}`).then((r) => r.data),
+    client.post(`/ai/thesis/${ticker}`, undefined, AI_TIMEOUT).then((r) => r.data),
 
   earningsSummary: (ticker: string, period = "latest") =>
-    client.post("/ai/earnings-summary", { ticker, period }).then((r) => r.data),
+    client.post("/ai/earnings-summary", { ticker, period }, AI_TIMEOUT).then((r) => r.data),
 
   portfolioRiskNarrative: (portfolioData: Record<string, any>) =>
-    client.post("/ai/portfolio-risk-narrative", portfolioData).then((r) => r.data),
+    client.post("/ai/portfolio-risk-narrative", portfolioData, AI_TIMEOUT).then((r) => r.data),
 
   getReport: (data: { ticker: string; report_type?: string }) =>
-    client.post("/ai/report", data).then((r) => r.data),
+    client.post("/ai/report", data, AI_TIMEOUT).then((r) => r.data),
 
   getEarningsSummary: (data: { ticker: string; period?: string }) =>
-    client.post("/ai/earnings-summary", data).then((r) => r.data),
+    client.post("/ai/earnings-summary", data, AI_TIMEOUT).then((r) => r.data),
 };
 
 // ── DASHBOARD ────────────────────────────────────────────────────
@@ -387,6 +410,222 @@ export const ipoApi = {
   listed: (days = 60) => client.get<{ ipos: IPOItem[] }>("/ipo/listed", { params: { days } }).then((r) => r.data),
   sme: () => client.get<{ ipos: IPOItem[] }>("/ipo/sme").then((r) => r.data),
   calendar: (month?: string) => client.get("/ipo/calendar", { params: { month } }).then((r) => r.data),
+};
+
+// ── SIMULATOR (paper trading) ─────────────────────────────────────
+export interface SimPortfolioRef {
+  id: number;
+  name: string;
+  starting_capital: number;
+  cash: number;
+}
+
+export interface SimHolding {
+  ticker: string;
+  name: string;
+  quantity: number;
+  avg_cost: number;
+  current_price: number;
+  market_value: number;
+  invested: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+  change_pct: number;
+  weight_pct: number;
+  source: string;
+}
+
+export interface SimPortfolioState {
+  id: number;
+  name: string;
+  starting_capital: number;
+  cash: number;
+  invested: number;
+  market_value: number;
+  total_value: number;
+  realized_pnl: number;
+  unrealized_pnl: number;
+  total_pnl: number;
+  total_pnl_pct: number;
+  holdings: SimHolding[];
+  holdings_count: number;
+  created_at: string;
+}
+
+export interface SimTransaction {
+  id: number;
+  ticker: string;
+  side: string;
+  quantity: number;
+  price: number;
+  fees: number;
+  realized_pnl: number;
+  timestamp: string;
+}
+
+export interface SimPerformance {
+  starting_capital: number;
+  current_value: number;
+  total_return_pct: number;
+  realized_pnl: number;
+  unrealized_pnl: number;
+  trades_total: number;
+  sells_closed: number;
+  win_rate: number;
+  avg_win: number;
+  avg_loss: number;
+  best_trade: number;
+  worst_trade: number;
+  max_drawdown_pct: number;
+  sharpe_ratio: number;
+  equity_curve: { date: string; value: number }[];
+}
+
+export const simulatorApi = {
+  createPortfolio: (data: { name: string; starting_capital: number }) =>
+    client.post<SimPortfolioRef>("/simulator/portfolio", data).then((r) => r.data),
+
+  listPortfolios: () =>
+    client.get<SimPortfolioRef[]>("/simulator/portfolios").then((r) => r.data),
+
+  getPortfolio: (id: number) =>
+    client.get<SimPortfolioState>(`/simulator/${id}/portfolio`).then((r) => r.data),
+
+  trade: (id: number, data: { ticker: string; side: "BUY" | "SELL"; quantity: number; price?: number }) =>
+    client.post<SimTransaction>(`/simulator/${id}/trade`, data).then((r) => r.data),
+
+  getTrades: (id: number) =>
+    client.get<SimTransaction[]>(`/simulator/${id}/trades`).then((r) => r.data),
+
+  getPerformance: (id: number) =>
+    client.get<SimPerformance>(`/simulator/${id}/performance`).then((r) => r.data),
+
+  delete: (id: number) =>
+    client.delete(`/simulator/${id}`).then((r) => r.data),
+};
+
+// ── INDICES ───────────────────────────────────────────────────────
+export interface IndexQuote {
+  name: string;
+  symbol: string;
+  group: string;
+  last: number;
+  change: number;
+  change_pct: number;
+  as_of?: string | null;
+}
+
+export interface IndexConstituent {
+  ticker: string;
+  name: string;
+  price: number;
+  change_pct: number;
+  sector: string;
+}
+
+export interface IndexDetail extends IndexQuote {
+  advancers: number;
+  decliners: number;
+  constituents: IndexConstituent[];
+}
+
+export const indicesApi = {
+  all: (refresh = false) =>
+    client.get<{ indices: IndexQuote[] }>("/dashboard/indices", { params: { refresh } }).then((r) => r.data),
+  detail: (symbol: string, refresh = false) =>
+    client.get<IndexDetail>("/dashboard/index", { params: { symbol, refresh } }).then((r) => r.data),
+};
+
+// ── SECTORS ───────────────────────────────────────────────────────
+export interface SectorComponent {
+  ticker: string;
+  name: string;
+  price: number;
+  change_pct: number;
+  composite_score: number | null;
+}
+
+export interface SectorPerf {
+  name: string;
+  change_pct: number;
+  week_pct: number | null;
+  month_pct: number | null;
+  avg_pe: number | null;
+  avg_roe: number | null;
+  momentum_score: number | null;
+  composite_score: number | null;
+  stock_count: number;
+  advancers: number;
+  decliners: number;
+  top_gainer: SectorComponent | null;
+  top_loser: SectorComponent | null;
+  components: SectorComponent[];
+}
+
+export interface SectorsResponse {
+  sectors: SectorPerf[];
+  heatmap: Record<string, number>;
+  sentiment: { bullish: number; neutral: number; bearish: number };
+  top_gainers: SectorComponent[];
+  top_losers: SectorComponent[];
+}
+
+export const sectorsApi = {
+  getPerformance: (refresh = false) =>
+    client.get<SectorsResponse>("/sectors/performance", { params: { refresh } }).then((r) => r.data),
+};
+
+// ── COMPARE (multi-asset) ─────────────────────────────────────────
+export interface CompareScores {
+  momentum: number | null;
+  quality: number | null;
+  value: number | null;
+  growth: number | null;
+  low_vol: number | null;
+  composite: number | null;
+}
+
+export interface CompareAsset {
+  ticker: string;
+  name: string;
+  sector: string | null;
+  price: number;
+  change_pct: number;
+  pe_ratio: number | null;
+  pb_ratio: number | null;
+  roe: number | null;
+  dividend_yield: number | null;
+  debt_equity: number | null;
+  market_cap: number | null;
+  returns_period: number | null;
+  volatility: number | null;
+  sharpe_ratio: number | null;
+  max_drawdown: number | null;
+  scores: CompareScores;
+  spark: number[];
+  source: string;
+}
+
+export interface BestPick {
+  ticker: string | null;
+  value: number | null;
+  reason: string;
+}
+
+export interface CompareResponse {
+  assets: CompareAsset[];
+  radar: Array<Record<string, string | number>>;
+  best_momentum: BestPick;
+  best_quality: BestPick;
+  best_value: BestPick;
+  best_risk_adjusted: BestPick;
+  best_return: BestPick;
+  recommendation: string;
+}
+
+export const compareApi = {
+  compareStocks: (tickers: string[], period = "1y") =>
+    client.post<CompareResponse>("/compare/stocks", { tickers, period }).then((r) => r.data),
 };
 
 // MF refresh helpers

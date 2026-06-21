@@ -14,6 +14,10 @@ node_modules/
 .env
 .env.local
 
+# Secrets / runtime state (never commit)
+.jwt_secret
+celerybeat-schedule
+
 # IDE
 .vscode/
 .idea/

@@ -70,6 +70,44 @@ def _seed_search(q: str) -> list[dict]:
     return [s for s in SEED_SCHEMES if ql in s["scheme_name"].lower() or ql in (s.get("fund_house") or "").lower()]
 
 
+_ALL_SCHEMES: list[dict] = []  # in-process cache of the full mfapi scheme list
+
+
+async def _all_schemes() -> list[dict]:
+    """Full mfapi.in scheme list (~14k), cached in-process + Redis for a day.
+    Enables local multi-term search that mfapi's own /mf/search can't do well."""
+    global _ALL_SCHEMES
+    if _ALL_SCHEMES:
+        return _ALL_SCHEMES
+    cached = await cache.get("mf:all")
+    if cached:
+        _ALL_SCHEMES = json.loads(cached)
+        return _ALL_SCHEMES
+    raw = await _get_json(f"{MFAPI_BASE}/mf")
+    if isinstance(raw, list) and raw:
+        _ALL_SCHEMES = [
+            {"scheme_code": x.get("schemeCode"), "scheme_name": x.get("schemeName")}
+            for x in raw if x.get("schemeName") and x.get("schemeCode")
+        ]
+        await cache.set("mf:all", json.dumps(_ALL_SCHEMES), 86400)
+    return _ALL_SCHEMES
+
+
+def _rank(name: str, terms: list[str]) -> float:
+    """Higher = better. Prefer prefix match, Direct/Growth plans, shorter names."""
+    score = 0.0
+    if name.startswith(terms[0]):
+        score += 100
+    if "direct" in name:
+        score += 6
+    if "growth" in name:
+        score += 4
+    if "dividend" in name or "idcw" in name or "bonus" in name:
+        score -= 3
+    score -= len(name) * 0.01
+    return score
+
+
 async def search_schemes(q: str, limit: int = 25) -> list[dict]:
     q = (q or "").strip()
     if len(q) < 2:
@@ -79,16 +117,24 @@ async def search_schemes(q: str, limit: int = 25) -> list[dict]:
     if cached:
         return json.loads(cached)[:limit]
 
-    raw = await _get_json(f"{MFAPI_BASE}/mf/search?q={httpx.URL(q)}")
     results: list[dict] = []
-    if isinstance(raw, list) and raw:
-        for item in raw:
-            results.append({
-                "scheme_code": item.get("schemeCode"),
-                "scheme_name": item.get("schemeName"),
-                "fund_house": None,
-                "category": None,
-            })
+    schemes = await _all_schemes()
+    if schemes:
+        terms = [t for t in q.lower().split() if t]
+        matched = [s for s in schemes if all(t in s["scheme_name"].lower() for t in terms)]
+        matched.sort(key=lambda s: _rank(s["scheme_name"].lower(), terms), reverse=True)
+        results = [
+            {"scheme_code": s["scheme_code"], "scheme_name": s["scheme_name"],
+             "fund_house": None, "category": None}
+            for s in matched[:limit]
+        ]
+
+    # Fallback to mfapi's own search, then the bundled seed list.
+    if not results:
+        raw = await _get_json(f"{MFAPI_BASE}/mf/search?q={httpx.URL(q)}")
+        if isinstance(raw, list) and raw:
+            results = [{"scheme_code": i.get("schemeCode"), "scheme_name": i.get("schemeName"),
+                        "fund_house": None, "category": None} for i in raw]
     if not results:
         results = _seed_search(q)
 
@@ -153,9 +199,10 @@ def _seed_detail(code: int) -> Optional[dict]:
         drift = (1.13 ** (i / 365))
         wobble = 1 + 0.04 * math.sin(i / 18.0)
         nav = round(base * drift * wobble, 4)
-        # Build dates going back `days` from a fixed reference
+        # Build dates going back `days` from today (not a fixed reference, which
+        # would go stale and stop the chart at a past date).
         from datetime import date, timedelta
-        d = date(2026, 6, 19) - timedelta(days=(days - 1 - i))
+        d = date.today() - timedelta(days=(days - 1 - i))
         history.append({"date": d.isoformat(), "nav": nav})
     return {
         "meta": {

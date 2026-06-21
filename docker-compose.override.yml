@@ -1,0 +1,17 @@
+# Local dev override.
+# - Remaps the Postgres host port to 5433 so it doesn't clash with a
+#   host-native Postgres already listening on 5432. The backend still reaches
+#   it internally over the Docker network as postgres:5432.
+# - Keeps the backend's depends_on light (no Ollama gate) so the API comes up
+#   fast; AI endpoints degrade to the offline engine if Ollama isn't running.
+services:
+  postgres:
+    ports:
+      - "5433:5432"
+
+  backend:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

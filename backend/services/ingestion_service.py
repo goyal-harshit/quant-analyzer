@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timezone
 import pandas as pd
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import StockMaster, PriceData, Fundamentals, FactorScore
@@ -85,7 +86,14 @@ class IngestionService:
 
         if new_records:
             db.add_all(new_records)
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError:
+                # A concurrent ingestion inserted the same (ticker, date) bars —
+                # the unique constraint rejected the duplicates. That's fine.
+                await db.rollback()
+                logger.info(f"Price bars for {ticker} already ingested concurrently.")
+                return 0
             logger.info(f"Ingested {len(new_records)} price bars for {ticker}.")
             return len(new_records)
         return 0
@@ -144,7 +152,14 @@ class IngestionService:
             if stock:
                 stock.market_cap = fund.get("market_cap")
 
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Concurrent upsert for the same (ticker, period) — re-fetch and update
+            # the row the other coroutine inserted instead of failing.
+            await db.rollback()
+            logger.info(f"Fundamentals for {ticker} ({period}) upserted concurrently.")
+            return False
         logger.info(f"Ingested fundamentals for {ticker} ({period}).")
         return True
 
@@ -212,7 +227,13 @@ class IngestionService:
             fact_record.momentum_6_1 = scores.get("momentum_6_1")
             fact_record.volatility_60d = scores.get("volatility_60d")
 
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError:
+                # Concurrent write for the same (ticker, date) — harmless.
+                await db.rollback()
+                logger.info(f"Factor scores for {ticker} written concurrently.")
+                return False
             logger.info(f"Computed and stored factors for {ticker}.")
             return True
         except Exception as e:

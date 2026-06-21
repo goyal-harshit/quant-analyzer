@@ -49,9 +49,16 @@ async def list_alerts(db: AsyncSession = Depends(get_db), current_user: User = D
 
 
 @router.delete("/{alert_id}")
-async def delete_alert(alert_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete an alert."""
-    res = await db.execute(select(Alert).where(Alert.id == alert_id))
+async def delete_alert(
+    alert_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete an alert (only the owner's own alerts)."""
+    # Scope the lookup to the current user — prevents IDOR (deleting others' alerts).
+    res = await db.execute(
+        select(Alert).where(Alert.id == alert_id, Alert.user_id == current_user.id)
+    )
     alert = res.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")

@@ -202,8 +202,15 @@ class ScreenerService:
                         val = _clean_number(latest)
                         if val is None:
                             continue
-                        if "sales" in label or "revenue" in label:
+                        if "sales" in label or "revenue" in label or "interest earned" in label:
                             result["revenue_cr"] = val
+                            # YoY revenue growth from the prior year's column.
+                            if len(values) >= 2:
+                                prev = _clean_number(values[-2])
+                                if prev and prev != 0:
+                                    result["revenue_growth"] = round((val / prev - 1) * 100, 2)
+                        elif "operating profit" in label:
+                            result["operating_profit_cr"] = val   # ≈ EBITDA
                         elif "net profit" in label:
                             result["net_profit_cr"] = val
                         elif label.strip() == "eps" or "eps" in label:
@@ -287,9 +294,30 @@ class ScreenerService:
                         elif "financing" in label or "funding" in label:
                             result["financing_cf_cr"] = val
 
-                # Compute free cash flow
+                # Free cash flow. Textbook FCF = operating CF − capex. Screener.in's
+                # public table doesn't break out capex separately, so we use net
+                # investing CF (which is dominated by capex and is already negative)
+                # as a proxy and label it explicitly as such.
                 if "operating_cf_cr" in result and "investing_cf_cr" in result:
                     result["free_cashflow_cr"] = result["operating_cf_cr"] + result["investing_cf_cr"]
+                    result["free_cashflow_is_proxy"] = True
+
+        # ── Derived ratios (compute the fields Screener doesn't print directly) ──
+        mcap = result.get("market_cap")            # already in INR
+        rev_cr = result.get("revenue_cr")
+        if mcap and rev_cr and rev_cr > 0:
+            ps = round(mcap / (rev_cr * 1e7), 2)
+            # Guard: standalone-vs-consolidated P&L mismatch on conglomerates can
+            # skew this; suppress implausible values rather than show wrong data.
+            if 0 < ps < 60:
+                result["ps_ratio"] = ps
+        ebitda_cr = result.get("operating_profit_cr")
+        if mcap and ebitda_cr and ebitda_cr > 0:
+            # EV ≈ market cap + total debt (cash not broken out on free pages).
+            ev = mcap + (result.get("total_debt_cr") or 0) * 1e7
+            evebitda = round(ev / (ebitda_cr * 1e7), 2)
+            if 0 < evebitda < 30:   # >30 usually means standalone EBITDA on a conglomerate
+                result["ev_ebitda"] = evebitda
 
         # ── Pros and Cons ───────────────────────────────────────
         pros_cons = soup.find("section", {"id": "analysis"})

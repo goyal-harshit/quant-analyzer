@@ -30,9 +30,13 @@ from modules.auth import router as auth
 from modules.insight import router as insight
 from modules.mutual_funds import router as mutual_funds_router
 from modules.ipo import router as ipo_router
+from modules.simulator import router as simulator
+from modules.compare import router as compare
+from modules.sectors import router as sectors
 # Import module models so init_db()'s create_all registers their tables.
 from modules.mutual_funds import models as _mf_models  # noqa: F401
 from modules.ipo import models as _ipo_models  # noqa: F401
+from modules.simulator import models as _sim_models  # noqa: F401
 from models.database import init_db, get_db
 
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +48,7 @@ async def _warm_universe():
     screener and dashboard are fast on first hit (avoids 50 cold screener.in scrapes
     on the request path). Guarded by a Redis flag so frequent dev reloads don't re-run it."""
     try:
-        from services.data_service import data_service, NIFTY_50_TICKERS, _gather_limited, _get_redis
+        from services.data_service import data_service, _get_redis
         r = await _get_redis()
         if r:
             try:
@@ -53,10 +57,25 @@ async def _warm_universe():
                 await r.setex("warm:universe", 600, "1")
             except Exception:
                 pass
-        logger.info("🔥 Warming universe cache (%d tickers)…", len(NIFTY_50_TICKERS))
-        await _gather_limited([data_service.get_fundamentals(t) for t in NIFTY_50_TICKERS], limit=10)
+        logger.info("🔥 Warming universe + sector caches…")
+        # Warm the composite universe (dashboard rankings + sector core). We do NOT
+        # pre-storm 50 fundamentals here — those sources (Screener.in / Yahoo
+        # quoteSummary) are frequently blocked from this host and the retry storm
+        # saturates the single worker, stalling every other request. Fundamentals
+        # fill in lazily/best-effort instead.
         await data_service.get_universe_overview()
-        logger.info("✅ Universe cache warmed")
+        try:
+            from modules.sectors import service as sectors_service
+            await sectors_service.get_sectors()
+        except Exception as e:
+            logger.warning(f"Sector cache warm failed: {e}")
+        try:
+            # Pre-cache the full mfapi scheme list so the first MF search is instant.
+            from modules.mutual_funds.service import _all_schemes
+            await _all_schemes()
+        except Exception as e:
+            logger.warning(f"MF scheme list warm failed: {e}")
+        logger.info("✅ Universe + sector caches warmed")
     except Exception as e:  # noqa: BLE001
         logger.warning(f"Universe warm-up failed: {e}")
 
@@ -92,6 +111,12 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# ── RATE LIMITING ─────────────────────────────────────────────────
+# Global default limits + per-route limits (login, AI). Guards against
+# resource abuse on the public compute/LLM endpoints and login brute-force.
+from services.rate_limit import install_rate_limiting  # noqa: E402
+install_rate_limiting(app)
 
 # ── CORS ─────────────────────────────────────────────────────────
 cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
@@ -132,6 +157,9 @@ app.include_router(auth.router,      prefix="/api/v1/auth",      tags=["Auth"])
 app.include_router(insight.router,   prefix="/api/v1/insight",   tags=["Insight"])
 app.include_router(mutual_funds_router.router, prefix="/api/v1/mf",  tags=["Mutual Funds"])
 app.include_router(ipo_router.router,          prefix="/api/v1/ipo", tags=["IPO"])
+app.include_router(simulator.router,           prefix="/api/v1/simulator", tags=["Simulator"])
+app.include_router(compare.router,             prefix="/api/v1/compare", tags=["Compare"])
+app.include_router(sectors.router,             prefix="/api/v1/sectors", tags=["Sectors"])
 
 
 @app.get("/")

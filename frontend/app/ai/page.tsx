@@ -27,11 +27,11 @@ const QUICK = [
   'Nifty 50 sector rotation — current macro regime signal',
 ]
 
-function Tag({ children, color = '#a78bfa' }) {
+function Tag({ children, color = '#a78bfa' }: { children: any; color?: string }) {
   return <span style={{ background: `${color}22`, color, border: `1px solid ${color}44`, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{children}</span>
 }
 
-function buildOfflineChatReply(q) {
+function buildOfflineChatReply(q: string) {
   const ql = q.toLowerCase()
   const mentioned = OFFLINE_STOCKS.filter(s => ql.includes(s.ticker.toLowerCase()) || ql.includes(s.name.toLowerCase().split(' ')[0]))
   if (mentioned.length >= 2) {
@@ -91,8 +91,8 @@ export default function AIChat() {
   }
 
   return (
-    <div style={{ padding: '26px 30px', maxWidth: 860, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 0px)', fontFamily: T.sans }}>
-      <div style={{ marginBottom: 12 }}>
+    <div style={{ padding: '26px 30px', maxWidth: 860, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', fontFamily: T.sans }}>
+      <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>QuantAI Research Assistant</div>
         <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button

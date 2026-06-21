@@ -7,7 +7,7 @@ API endpoints directly via httpx. Works reliably from Docker containers.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -77,6 +77,43 @@ class FastDataService:
         df = df.dropna(subset=["close"])
         return df
 
+    # ── SYMBOL SEARCH ─────────────────────────────────────────────
+    async def search(self, q: str, limit: int = 15) -> list[dict]:
+        """Search ANY listed NSE/BSE stock via Yahoo's search API (covers the
+        whole market, not a hardcoded list). NSE (.NS) preferred over BSE (.BO)."""
+        q = (q or "").strip()
+        if not q:
+            return []
+        data = await self._get(
+            f"{YAHOO_BASE}/v1/finance/search",
+            params={"q": q, "quotesCount": 20, "newsCount": 0, "enableFuzzyQuery": "true"},
+        )
+        out: list[dict] = []
+        seen: set[str] = set()
+        for it in (data or {}).get("quotes", []) or []:
+            # Equities only — exclude Yahoo's mutual-fund (0P…), ETF and index hits.
+            if (it.get("quoteType") or "").upper() != "EQUITY":
+                continue
+            sym = (it.get("symbol") or "").upper()
+            exch = (it.get("exchange") or "").upper()
+            is_nse = sym.endswith(".NS") or exch == "NSI"
+            is_bse = sym.endswith(".BO") or exch == "BSE"
+            if not (is_nse or is_bse):
+                continue
+            ticker = sym.replace(".NS", "").replace(".BO", "")
+            if not ticker or ticker in seen:
+                continue
+            seen.add(ticker)
+            out.append({
+                "ticker": ticker,
+                "name": it.get("shortname") or it.get("longname") or ticker,
+                "sector": it.get("sector") or it.get("sectorDisp") or "",
+                "exchange": "NSE" if is_nse else "BSE",
+            })
+            if len(out) >= limit:
+                break
+        return out
+
     # ── LIVE QUOTE ────────────────────────────────────────────────
     async def get_quote(self, ticker: str) -> dict:
         """Fetch current quote from Yahoo Finance chart API (1d range)."""
@@ -86,30 +123,56 @@ class FastDataService:
         else:
             formatted_ns = formatted
 
+        # range=1d → meta.chartPreviousClose is the *prior trading session's* close,
+        # which is exactly the baseline for the daily change. (A 5d range made
+        # chartPreviousClose ~5 days old, and deriving prev-close from the candle
+        # series broke when the live price drifted from the last candle's close,
+        # mislabelling the current session as already-closed.)
         data = await self._get(
             f"{YAHOO_BASE}/v8/finance/chart/{formatted_ns}",
-            params={"interval": "1d", "range": "5d", "includePrePost": "false"}
+            params={"interval": "1d", "range": "1d", "includePrePost": "false"}
         )
         if (not data or not data.get("chart", {}).get("result")) and not (formatted.startswith("^") or "." in formatted):
             # Try BSE
             data = await self._get(
                 f"{YAHOO_BASE}/v8/finance/chart/{formatted}.BO",
-                params={"interval": "1d", "range": "5d", "includePrePost": "false"}
+                params={"interval": "1d", "range": "1d", "includePrePost": "false"}
             )
         if not data or not data.get("chart", {}).get("result"):
             return {}
 
-        meta = data["chart"]["result"][0]["meta"]
+        result = data["chart"]["result"][0]
+        meta = result["meta"]
         price = meta.get("regularMarketPrice", 0)
-        prev_close = meta.get("chartPreviousClose", meta.get("previousClose", 0))
-        change = round(price - prev_close, 2) if price and prev_close else 0.0
-        change_pct = round((change / prev_close) * 100, 2) if change and prev_close else 0.0
+        prev_close = meta.get("chartPreviousClose") or meta.get("previousClose") or 0
+        # Fallback only if meta omits the prior close.
+        if not prev_close:
+            try:
+                closes = [c for c in result["indicators"]["quote"][0]["close"] if c is not None]
+                if closes:
+                    prev_close = closes[-2] if len(closes) >= 2 else closes[-1]
+            except Exception:
+                pass
+        if not price:
+            price = prev_close
+
+        # Guard on prev_close only — a 0.0 change is a valid value, not "missing".
+        change = round(price - prev_close, 2) if (price and prev_close) else 0.0
+        change_pct = round((change / prev_close) * 100, 2) if prev_close else 0.0
+
+        market_time = meta.get("regularMarketTime")
+        as_of = (
+            datetime.fromtimestamp(market_time, tz=timezone.utc).isoformat()
+            if market_time else None
+        )
 
         return {
             "ticker": ticker,
             "name": meta.get("shortName", meta.get("longName", ticker)),
             "price": price,
             "prev_close": prev_close,
+            "source": "live",
+            "as_of": as_of,
             "change": change,
             "change_pct": change_pct,
             "open": meta.get("regularMarketDayOpen", 0),

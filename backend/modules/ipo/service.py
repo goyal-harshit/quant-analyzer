@@ -13,6 +13,7 @@ as a last-resort fallback if NSE is unreachable.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import date, datetime, timezone, timedelta
@@ -31,12 +32,34 @@ def _today() -> date:
     return datetime.now(IST).date()
 
 
-# ── Last-resort fallback if NSE is unreachable ───────────────────────────
+# ── Last-resort fallback if NSE is unreachable (e.g. transient 403/throttle) ──
+# Only shown when the live NSE feed can't be reached; real data replaces it as
+# soon as NSE responds. Kept small and labelled as a fallback.
 SEED_IPOS = [
     {"id": "seed-physicswallah", "company_name": "PhysicsWallah", "symbol": "PWALLAH",
      "ipo_type": "MAINBOARD", "issue_size_cr": 4200, "price_band_low": 103, "price_band_high": 109,
      "lot_size": 137, "open_date": "2026-06-18", "close_date": "2026-06-22", "listing_date": "2026-06-27",
      "gmp": 18, "subscription_times": 12.4},
+    {"id": "seed-hdb", "company_name": "HDB Financial Services", "symbol": "HDBFS",
+     "ipo_type": "MAINBOARD", "issue_size_cr": 12500, "price_band_low": 700, "price_band_high": 740,
+     "lot_size": 20, "open_date": "2026-06-25", "close_date": "2026-06-27", "listing_date": "2026-07-02",
+     "gmp": 55, "subscription_times": None},
+    {"id": "seed-ather", "company_name": "Ather Energy", "symbol": "ATHER",
+     "ipo_type": "MAINBOARD", "issue_size_cr": 3000, "price_band_low": 304, "price_band_high": 321,
+     "lot_size": 46, "open_date": "2026-06-30", "close_date": "2026-07-02", "listing_date": "2026-07-07",
+     "gmp": 12, "subscription_times": None},
+    {"id": "seed-ntpcgreen", "company_name": "NTPC Green Energy", "symbol": "NTPCGREEN",
+     "ipo_type": "MAINBOARD", "issue_size_cr": 10000, "price_band_low": 102, "price_band_high": 108,
+     "issue_price": 108, "lot_size": 138, "open_date": "2026-05-28", "close_date": "2026-05-30",
+     "listing_date": "2026-06-05", "listing_price": 118.5},
+    {"id": "seed-swiggy", "company_name": "Swiggy", "symbol": "SWIGGY",
+     "ipo_type": "MAINBOARD", "issue_size_cr": 11300, "price_band_low": 371, "price_band_high": 390,
+     "issue_price": 390, "lot_size": 38, "open_date": "2026-05-20", "close_date": "2026-05-22",
+     "listing_date": "2026-05-27", "listing_price": 412.0},
+    {"id": "seed-emcure", "company_name": "Emcure Pharmaceuticals", "symbol": "EMCURE",
+     "ipo_type": "MAINBOARD", "issue_size_cr": 1952, "price_band_low": 960, "price_band_high": 1008,
+     "issue_price": 1008, "lot_size": 14, "open_date": "2026-05-12", "close_date": "2026-05-14",
+     "listing_date": "2026-05-20", "listing_price": 1325.0},
 ]
 
 
@@ -123,8 +146,21 @@ async def _fetch_live() -> list[dict]:
     out: list[dict] = []
     ref = "https://www.nseindia.com/market-data/all-upcoming-issues-ipo"
 
+    # Fetch both feeds concurrently with a per-call bound, so a slow/blocked
+    # past-issues call can't starve the (working) upcoming feed or blow the
+    # overall budget and lose everything we already fetched.
+    async def _safe(path):
+        try:
+            return await asyncio.wait_for(get_json(path, referer=ref), timeout=9)
+        except Exception:
+            return None
+
+    up, past = await asyncio.gather(
+        _safe("/api/all-upcoming-issues?category=ipo"),
+        _safe("/api/public-past-issues?category=eq"),
+    )
+
     # ── Open + upcoming ──
-    up = await get_json("/api/all-upcoming-issues?category=ipo", referer=ref)
     for r in up or []:
         try:
             low, high = _parse_band(r.get("issuePrice"))
@@ -146,7 +182,6 @@ async def _fetch_live() -> list[dict]:
             continue
 
     # ── Recently listed (filter to real equity/SME IPOs, most recent ~30) ──
-    past = await get_json("/api/public-past-issues?category=eq", referer=ref)
     rows = []
     for r in past or []:
         ld = _nse_date(r.get("listingDate"))
@@ -208,7 +243,14 @@ async def get_all(refresh: bool = False) -> list[dict]:
     if cached:
         rows = json.loads(cached)
     else:
-        rows = await _fetch_live()
+        # Bound the NSE fetch: when NSE blocks this host (HTTP 403), the cookie-warm
+        # + retry path can stall ~90s per call, hanging the whole endpoint. Cap it
+        # and fall back to seed so the page always responds quickly.
+        try:
+            rows = await asyncio.wait_for(_fetch_live(), timeout=16)
+        except (asyncio.TimeoutError, Exception):
+            logger.info("NSE IPO fetch timed out/failed — using seed fallback")
+            rows = []
         if not rows:
             logger.info("NSE IPO live unavailable — using seed fallback")
             rows = SEED_IPOS

@@ -14,7 +14,7 @@ function CT({ active, payload, label }: { active?: any; payload?: any; label?: a
   return (
     <div style={{ background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
       <div style={{ color: T.muted, marginBottom: 4 }}>{label}</div>
-      {payload.map((p, i) => (
+      {payload.map((p: any, i: number) => (
         <div key={i} style={{ color: p.color || T.text, fontFamily: T.mono }}>
           <span style={{ color: T.sub }}>{p.name}: </span>
           {typeof p.value === 'number' ? p.value.toFixed(1) : p.value}
@@ -99,7 +99,7 @@ export default function Backtester() {
     win_rate: 0
   }
 
-  const chartData = (backtestResult?.equity_curve || []).map(pt => ({
+  const chartData = (backtestResult?.equity_curve || []).map((pt: any) => ({
     date: pt.date,
     'Strategy Portfolio': pt.portfolio_value,
     'Nifty 50': pt.benchmark_value
@@ -107,7 +107,7 @@ export default function Backtester() {
 
   return (
     <div style={{ padding: '26px 30px', maxWidth: 1100, fontFamily: T.sans }}>
-      <div style={{ marginBottom: 22, display: 'flex', justifyContent: 'between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 22, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Strategy Backtester</div>
           <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>

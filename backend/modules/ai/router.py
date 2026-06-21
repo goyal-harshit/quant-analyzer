@@ -1,7 +1,7 @@
 """AI Router — LLM-powered research endpoints"""
 
 import asyncio
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from datetime import datetime, timezone
 
 from models.schemas import (
@@ -11,43 +11,48 @@ from models.schemas import (
 from services.ai_service import ai_service, SYSTEM_PROMPT_ANALYST, _STOCKS, buildOfflineReport, buildOfflineChatReply
 from services.data_service import data_service
 from services.fast_data import compute_quant_factors
+from services.validation import validate_ticker
+from services.rate_limit import limiter
 
 router = APIRouter()
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@limiter.limit("20/minute")
+async def chat(request: Request, payload: ChatRequest):
     """
     Conversational research assistant.
     Maintains context across a message thread; optionally biased toward
     a specific stock the user is currently viewing.
     """
-    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    messages = [{"role": m.role, "content": m.content} for m in payload.messages]
     result = await ai_service.chat(
         messages,
-        context_ticker=request.context_ticker,
-        provider=request.provider,
-        model=request.model,
-        api_key=request.api_key,
+        context_ticker=payload.context_ticker,
+        provider=payload.provider,
+        model=payload.model,
+        api_key=payload.api_key,
     )
     return ChatResponse(**result)
 
 
 @router.post("/report/{ticker}", response_model=AIReportResponse)
-async def generate_report(ticker: str, request: AIReportRequest = None):
+@limiter.limit("20/minute")
+async def generate_report(request: Request, ticker: str, payload: AIReportRequest = None):
     """
     Generate a full AI research report for a stock combining fundamentals,
     factor scores, and qualitative analysis.
     """
-    ticker = ticker.upper()
+    ticker = validate_ticker(ticker)
     fundamentals = await data_service.get_fundamentals(ticker)
     quote = await data_service.get_quote(ticker)
 
     if not fundamentals:
         raise HTTPException(status_code=404, detail=f"No data available for {ticker}")
 
-    stock_data = {**fundamentals, **quote, "ticker": ticker}
-    report_type = request.report_type if request else "full"
+    # Defensive: never unpack a None into a dict literal.
+    stock_data = {**(fundamentals or {}), **(quote or {}), "ticker": ticker}
+    report_type = payload.report_type if payload else "full"
 
     content = await ai_service.generate_stock_report(stock_data, report_type)
 
@@ -61,12 +66,13 @@ async def generate_report(ticker: str, request: AIReportRequest = None):
 
 
 @router.get("/insight/{ticker}")
-async def get_stock_insight(ticker: str):
+@limiter.limit("30/minute")
+async def get_stock_insight(request: Request, ticker: str):
     """
     Get real stock data + quant factors + AI analysis for ANY ticker.
     Uses direct Yahoo Finance API calls (fast, reliable from Docker).
     """
-    ticker = ticker.upper().replace(".NS", "").replace(".BO", "")
+    ticker = validate_ticker(ticker).replace(".NS", "").replace(".BO", "")
 
     # Single cached call per data type — all parallel, fast fallback
     _f, _q, _prices = await asyncio.gather(
@@ -179,34 +185,38 @@ Be brief. Use numbers. No headers."""
 
 
 @router.post("/earnings-summary")
-async def summarise_earnings(request: EarningsSummaryRequest):
+@limiter.limit("20/minute")
+async def summarise_earnings(request: Request, payload: EarningsSummaryRequest):
     """
     Summarise earnings release for a ticker.
     In production: fetch raw filing text from NSE/BSE corporate
     announcements or earnings call transcript providers.
     """
     # Placeholder: in production, fetch actual filing text
-    placeholder_text = f"[Earnings filing text for {request.ticker}, period {request.period} would be fetched from NSE/BSE corporate announcements API here]"
+    ticker = validate_ticker(payload.ticker)
+    placeholder_text = f"[Earnings filing text for {ticker}, period {payload.period} would be fetched from NSE/BSE corporate announcements API here]"
 
-    summary = await ai_service.summarise_earnings(request.ticker, placeholder_text)
+    summary = await ai_service.summarise_earnings(ticker, placeholder_text)
     return {
-        "ticker": request.ticker,
-        "period": request.period,
+        "ticker": ticker,
+        "period": payload.period,
         "summary": summary,
     }
 
 
 @router.post("/thesis/{ticker}")
-async def generate_thesis(ticker: str):
+@limiter.limit("20/minute")
+async def generate_thesis(request: Request, ticker: str):
     """Generate a structured bull/bear investment thesis."""
-    ticker = ticker.upper()
+    ticker = validate_ticker(ticker)
     fundamentals = await data_service.get_fundamentals(ticker)
     quote = await data_service.get_quote(ticker)
 
     if not fundamentals:
         raise HTTPException(status_code=404, detail=f"No data available for {ticker}")
 
-    stock_data = {**fundamentals, **quote, "ticker": ticker}
+    # Defensive: never unpack a None into a dict literal.
+    stock_data = {**(fundamentals or {}), **(quote or {}), "ticker": ticker}
     thesis = await ai_service.generate_investment_thesis(stock_data)
 
     return {"ticker": ticker, "thesis": thesis}

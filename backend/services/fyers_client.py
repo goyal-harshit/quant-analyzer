@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -31,6 +31,8 @@ class NseIndiaApiClient:
         self._client: Optional[httpx.AsyncClient] = None
         self._session_cookies: dict = {}
         self._cookie_ttl: Optional[datetime] = None
+        # Bound concurrent NSE requests — firing all at once gets the client throttled/blocked.
+        self._batch_sem = asyncio.Semaphore(5)
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -50,7 +52,7 @@ class NseIndiaApiClient:
             resp.raise_for_status()
             cookies = {c.name: c.value for c in client.cookies.jar}
             self._session_cookies = cookies
-            self._cookie_ttl = datetime.utcnow() + timedelta(minutes=10)
+            self._cookie_ttl = datetime.now(timezone.utc) + timedelta(minutes=10)
             logger.info("NSE session refreshed, cookies=%s", list(cookies.keys()))
         except Exception as e:
             logger.warning("NSE session refresh failed: %s", e)
@@ -59,7 +61,7 @@ class NseIndiaApiClient:
 
     async def _ensure_session(self):
         if not self._session_cookies or (
-            self._cookie_ttl and datetime.utcnow() > self._cookie_ttl
+            self._cookie_ttl and datetime.now(timezone.utc) > self._cookie_ttl
         ):
             await self._refresh_session()
 
@@ -79,11 +81,11 @@ class NseIndiaApiClient:
             logger.warning("No NSE session available, skipping quote for %s", symbol)
             return None
 
-        url = (
-            f"{self.BASE_URL}/api/quote-equity"
-            f"?symbol={symbol.upper()}"
-        )
+        url = f"{self.BASE_URL}/api/quote-equity"
+        # Pass symbol via params so httpx URL-encodes it — tickers like 'M&M'
+        # contain '&' which would otherwise break the query string.
         params = {
+            "symbol": symbol.upper(),
             "section": "trade_info",
         }
         try:
@@ -120,8 +122,11 @@ class NseIndiaApiClient:
         return None
 
     async def get_quotes_batch(self, symbols: list[str]) -> dict[str, Optional[dict]]:
-        """Fetch quotes for multiple symbols concurrently."""
-        tasks = [self.get_quote(s) for s in symbols]
+        """Fetch quotes for multiple symbols with bounded concurrency (NSE throttles bursts)."""
+        async def _one(s):
+            async with self._batch_sem:
+                return await self.get_quote(s)
+        tasks = [_one(s) for s in symbols]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         out = {}
         for sym, res in zip(symbols, results):
@@ -214,16 +219,19 @@ class NseIndiaApiClient:
             await self._client.aclose()
 
     def __del__(self):
-        if self._client and not self._client.is_closed:
-            try:
-                import asyncio
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    loop.create_task(self._client.aclose())
-                else:
-                    loop.run_until_complete(self._client.aclose())
-            except Exception:
-                pass
+        # Best-effort cleanup only. Never drive the event loop from __del__
+        # (run_until_complete on a closed/foreign loop raises). If a loop is
+        # running, schedule the close; otherwise leave it to GC / process exit.
+        client = self._client
+        if not client or client.is_closed:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(client.aclose())
+        except RuntimeError:
+            pass
+        except Exception:
+            pass
 
 
 nse_client = NseIndiaApiClient()

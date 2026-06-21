@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Star, Trash2, Plus, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react'
@@ -30,10 +30,14 @@ export default function WatchlistsPage() {
   const deleteMutation = useDeleteWatchlist()
   const updateTickersMutation = useUpdateWatchlistTickers()
 
-  // Automatically select the first watchlist if none selected
-  if (watchlists.length > 0 && selectedId === null) {
-    setSelectedId(watchlists[0].id)
-  }
+  // Automatically select the first watchlist if none selected.
+  // Must run in an effect — calling setState during render triggers
+  // "Cannot update a component while rendering" and risks re-render loops.
+  useEffect(() => {
+    if (watchlists.length > 0 && selectedId === null) {
+      setSelectedId(watchlists[0].id)
+    }
+  }, [watchlists, selectedId])
 
   // Fetch selected watchlist details (which includes live quotes)
   const { data: activeList, isLoading: listLoading } = useWatchlist(selectedId || 0, refreshSeed)
@@ -56,7 +60,7 @@ export default function WatchlistsPage() {
     if (confirm('Are you sure you want to delete this watchlist?')) {
       deleteMutation.mutate(selectedId, {
         onSuccess: () => {
-          setSelectedId(watchlists.find(w => w.id !== selectedId)?.id || null)
+          setSelectedId(watchlists.find((w: any) => w.id !== selectedId)?.id || null)
         }
       })
     }
@@ -89,14 +93,14 @@ export default function WatchlistsPage() {
     const currentTickers = activeList.tickers || []
     updateTickersMutation.mutate({
       id: selectedId,
-      tickers: currentTickers.filter(t => t !== symbol)
+      tickers: currentTickers.filter((t: string) => t !== symbol)
     })
   }
 
   const tickersList = activeList?.tickers || []
   const quotesMap = activeList?.quotes || {}
 
-  const filteredTickers = tickersList.filter(t => {
+  const filteredTickers = tickersList.filter((t: string) => {
     const quote = quotesMap[t]
     const name = quote?.name || ''
     return t.includes(searchQuery.toUpperCase()) || name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -106,7 +110,7 @@ export default function WatchlistsPage() {
 
   return (
     <div style={{ padding: '26px 30px', maxWidth: 1400, fontFamily: T.sans }}>
-      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Personal Watchlists</div>
           <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>
@@ -144,7 +148,7 @@ export default function WatchlistsPage() {
                   padding: '8px 10px', fontSize: 12, color: T.text, cursor: 'pointer',
                 }}
               >
-                {watchlists.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                {watchlists.map((w: any) => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             )}
           </div>
@@ -255,7 +259,7 @@ export default function WatchlistsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTickers.map((ticker, i) => {
+                  {filteredTickers.map((ticker: string, i: number) => {
                     const stk = quotesMap[ticker] || { ticker, name: ticker, sector: 'Unknown', price: 0, change_pct: 0 }
                     const isPos = (stk.change_pct ?? 0) >= 0
                     // Seed data or cached fallback composite score

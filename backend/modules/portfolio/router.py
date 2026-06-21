@@ -30,17 +30,29 @@ async def list_portfolios(db: AsyncSession = Depends(get_db), current_user: User
         select(PortfolioModel).where(PortfolioModel.user_id == user_id)
     )
     portfolios = res.scalars().all()
-    result = []
+
+    # Gather every position once, then batch-quote all unique tickers in a single
+    # concurrent pass (avoids the N+1 sequential get_quote per position).
+    portfolio_positions: dict = {}
+    all_tickers: set = set()
     for p in portfolios:
         pos_res = await db.execute(
             select(PositionModel).where(PositionModel.portfolio_id == p.id)
         )
         positions = pos_res.scalars().all()
+        portfolio_positions[p.id] = positions
+        all_tickers.update(pos.ticker for pos in positions)
+
+    quote_map = await data_service.get_batch_quotes(list(all_tickers)) if all_tickers else {}
+
+    result = []
+    for p in portfolios:
+        positions = portfolio_positions[p.id]
         total_value = 0.0
         total_cost = 0.0
         for pos in positions:
-            quote = await data_service.get_quote(pos.ticker)
-            price = quote.get("price") or pos.avg_cost
+            quote = quote_map.get(pos.ticker) or {}
+            price = (quote.get("price") if isinstance(quote, dict) else None) or pos.avg_cost
             total_value += price * pos.quantity
             total_cost += pos.avg_cost * pos.quantity
         total_pnl = total_value - total_cost
@@ -351,10 +363,14 @@ async def get_portfolio_performance(
         return {"performance": [], "benchmark": benchmark}
 
     import pandas as pd
+    # Fetch all position histories concurrently (avoids the N+1 sequential awaits).
+    hist_results = await _gather_limited(
+        [data_service.get_price_history(pos.ticker, period=period, refresh=refresh) for pos in positions],
+        limit=8,
+    )
     history_dfs = {}
-    for pos in positions:
-        df = await data_service.get_price_history(pos.ticker, period=period, refresh=refresh)
-        if not df.empty:
+    for pos, df in zip(positions, hist_results):
+        if df is not None and not isinstance(df, Exception) and not df.empty:
             df_copy = df.copy()
             df_copy.columns = [c.lower() for c in df_copy.columns]
             if "close" in df_copy.columns:

@@ -3,7 +3,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Filter, Target, RefreshCw, Globe, MessageSquare, Zap, Cpu, LogOut, User, Menu, Star, PiggyBank, Rocket } from 'lucide-react'
+import { Home, Filter, Target, RefreshCw, Globe, MessageSquare, Zap, Cpu, LogOut, User, Menu, Star, PiggyBank, Rocket, LineChart, GitCompareArrows, Grid3x3, Activity } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { useEffect, useState } from 'react'
 import ModelSelector from '../ai/ModelSelector'
@@ -11,9 +11,13 @@ import ModelSelector from '../ai/ModelSelector'
 const NAV = [
   { id: 'dashboard', icon: Home, label: 'Dashboard', href: '/dashboard' },
   { id: 'screener', icon: Filter, label: 'Screener', href: '/screener' },
+  { id: 'compare', icon: GitCompareArrows, label: 'Compare', href: '/compare' },
+  { id: 'sectors', icon: Grid3x3, label: 'Sectors', href: '/sectors' },
+  { id: 'indices', icon: Activity, label: 'Indices', href: '/indices' },
   { id: 'mutual-funds', icon: PiggyBank, label: 'Mutual Funds', href: '/mutual-funds' },
   { id: 'ipo', icon: Rocket, label: 'IPO Tracker', href: '/ipo' },
   { id: 'portfolio', icon: Target, label: 'Portfolio', href: '/portfolio' },
+  { id: 'simulator', icon: LineChart, label: 'Simulator', href: '/simulator' },
   { id: 'watchlists', icon: Star, label: 'Watchlists', href: '/watchlists' },
   { id: 'backtest', icon: RefreshCw, label: 'Backtester', href: '/backtest' },
   { id: 'macro', icon: Globe, label: 'Macro', href: '/macro' },
@@ -23,9 +27,11 @@ const NAV = [
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
+  isMobile?: boolean
+  mobileOpen?: boolean
 }
 
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, isMobile = false, mobileOpen = false }: SidebarProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'active' | 'unavailable'>('checking')
@@ -47,8 +53,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <div
-      className="fixed left-0 top-0 bottom-0 bg-card border-r border-border flex flex-col z-40 transition-all duration-300"
-      style={{ width: collapsed ? '64px' : '224px' }}
+      className="fixed left-0 top-0 bottom-0 bg-card border-r border-border flex flex-col z-50 transition-transform duration-300"
+      style={{
+        width: collapsed ? '64px' : '224px',
+        // On mobile the rail slides off-canvas until the drawer is opened.
+        transform: isMobile && !mobileOpen ? 'translateX(-100%)' : 'translateX(0)',
+      }}
     >
       {/* Header */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-border">

@@ -19,20 +19,32 @@ logger = logging.getLogger(__name__)
 
 
 def run_async(coro):
+    """Run a coroutine to completion from a synchronous Celery worker.
+
+    Celery prefork workers have no running loop, so a fresh loop per task is the
+    safe default. Only if we're somehow already inside a running loop do we fall
+    back to nest_asyncio.
+    """
     try:
-        loop = asyncio.get_event_loop()
+        running = asyncio.get_running_loop()
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    if loop.is_running():
+        running = None
+
+    if running is not None:
         try:
             import nest_asyncio
             nest_asyncio.apply()
         except ImportError:
             pass
+        return running.run_until_complete(coro)
+
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
         return loop.run_until_complete(coro)
-    else:
-        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
 
 
 async def _precompute_single_factor(ticker: str) -> dict:
@@ -234,21 +246,22 @@ def ingest_prices_task(limit_tickers=50):
     """Ingest price history for top N tickers."""
     logger.info(f"Celery: running ingest_prices_task for top {limit_tickers} tickers...")
     async def _run():
-        async with AsyncSessionLocal() as db:
-            count = 0
-            sem = asyncio.Semaphore(8)
-            async def _ingest(s):
-                async with sem:
+        sem = asyncio.Semaphore(8)
+        async def _ingest(s):
+            async with sem:
+                # Each coroutine gets its OWN session — AsyncSession is not safe
+                # for concurrent use across coroutines.
+                async with AsyncSessionLocal() as db:
                     try:
                         await ingestion_service.ingest_prices(db, s)
                         return True
                     except Exception as e:
                         logger.error(f"Failed to ingest price for {s}: {e}")
                         return False
-            tasks = [_ingest(s) for s in DEFAULT_TICKERS[:limit_tickers]]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            count = sum(1 for r in results if r is True)
-            logger.info(f"Finished ingesting prices for {count} stocks.")
+        tasks = [_ingest(s) for s in DEFAULT_TICKERS[:limit_tickers]]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        count = sum(1 for r in results if r is True)
+        logger.info(f"Finished ingesting prices for {count} stocks.")
     from services.seed_data import DEFAULT_TICKERS
     run_async(_run())
 
@@ -276,19 +289,21 @@ def refresh_fundamentals_task(limit_tickers=50):
     """Refresh fundamental attributes from Yahoo/Screener.in — parallel."""
     logger.info(f"Celery: running refresh_fundamentals_task for top {limit_tickers} tickers...")
     async def _run():
-        async with AsyncSessionLocal() as db:
-            sem = asyncio.Semaphore(8)
-            async def _refresh(s):
-                async with sem:
+        sem = asyncio.Semaphore(8)
+        async def _refresh(s):
+            async with sem:
+                # Each coroutine gets its OWN session — AsyncSession is not safe
+                # for concurrent use across coroutines.
+                async with AsyncSessionLocal() as db:
                     try:
                         await ingestion_service.ingest_fundamentals(db, s)
                         return True
                     except Exception as e:
                         logger.error(f"Failed to ingest fundamentals for {s}: {e}")
                         return False
-            tasks = [_refresh(s) for s in DEFAULT_TICKERS[:limit_tickers]]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            ok = sum(1 for r in results if r is True)
-            logger.info(f"Refreshed fundamentals for {ok} stocks.")
+        tasks = [_refresh(s) for s in DEFAULT_TICKERS[:limit_tickers]]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        ok = sum(1 for r in results if r is True)
+        logger.info(f"Refreshed fundamentals for {ok} stocks.")
     from services.seed_data import DEFAULT_TICKERS
     run_async(_run())

@@ -3,10 +3,14 @@
 from celery import Celery
 import os
 
+# Use SEPARATE Redis logical DBs for the Celery broker (/1) and result backend
+# (/2) so they don't collide with the application cache (which uses /0).
+_redis_base = os.getenv("REDIS_URL", "redis://localhost:6379/0").rsplit("/", 1)[0]
+
 celery_app = Celery(
     "quantai",
-    broker=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-    backend=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+    broker=os.getenv("CELERY_BROKER_URL", f"{_redis_base}/1"),
+    backend=os.getenv("CELERY_RESULT_BACKEND", f"{_redis_base}/2"),
 )
 
 celery_app.conf.update(

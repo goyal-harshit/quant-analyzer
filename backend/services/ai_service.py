@@ -22,11 +22,20 @@ for commercial use — no Anthropic/OpenAI bill, ever.
 """
 
 import os
+import re
 import logging
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+def _mentions(text: str, term: str) -> bool:
+    """Whole-word, case-insensitive match — avoids 'IT' matching 'Industries'."""
+    term = (term or "").strip()
+    if not term:
+        return False
+    return re.search(rf"\b{re.escape(term.lower())}\b", text) is not None
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
@@ -156,7 +165,7 @@ def buildOfflineReport(stock: dict) -> str:
 
 def buildOfflineChatReply(query: str) -> str:
     ql = query.lower()
-    mentioned = [s for s in _STOCKS if ql.find(s["ticker"].lower()) != -1 or ql.find(s["name"].lower()) != -1]
+    mentioned = [s for s in _STOCKS if _mentions(ql, s["ticker"]) or _mentions(ql, s["name"])]
     if len(mentioned) >= 2:
         a, b = mentioned[:2]
         return (

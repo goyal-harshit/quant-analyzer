@@ -5,11 +5,16 @@ Async SQLAlchemy with connection pooling
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, Boolean, Text, Index, Date
+from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, Boolean, Text, Index, Date, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import os
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware UTC now. Replaces the deprecated datetime.utcnow."""
+    return datetime.now(timezone.utc)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -39,8 +44,8 @@ class StockMaster(Base):
     isin:        Mapped[Optional[str]] = mapped_column(String(20))
     market_cap:  Mapped[Optional[float]] = mapped_column(Float)
     is_active:   Mapped[bool]          = mapped_column(Boolean, default=True)
-    created_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at:  Mapped[datetime]      = mapped_column(DateTime, default=_utcnow)
+    updated_at:  Mapped[datetime]      = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     price_data:     Mapped[list["PriceData"]]    = relationship(back_populates="stock")
     fundamentals:   Mapped[list["Fundamentals"]] = relationship(back_populates="stock")
@@ -54,6 +59,8 @@ class PriceData(Base):
     __tablename__ = "price_data"
     __table_args__ = (
         Index("ix_price_data_ticker_date", "ticker", "date"),
+        # Prevents duplicate bars from concurrent ingestion (check-then-act race).
+        UniqueConstraint("ticker", "date", name="uq_price_data_ticker_date"),
     )
 
     id:       Mapped[int]   = mapped_column(Integer, primary_key=True)
@@ -74,6 +81,10 @@ class PriceData(Base):
 
 class Fundamentals(Base):
     __tablename__ = "fundamentals"
+    __table_args__ = (
+        # One fundamentals row per (ticker, period) — guards the upsert race.
+        UniqueConstraint("ticker", "period", name="uq_fundamentals_ticker_period"),
+    )
 
     id:             Mapped[int]            = mapped_column(Integer, primary_key=True)
     ticker:         Mapped[str]            = mapped_column(String(20), ForeignKey("stock_master.ticker"), nullable=False)
@@ -98,7 +109,7 @@ class Fundamentals(Base):
     ebitda:         Mapped[Optional[float]] = mapped_column(Float)
     net_profit:     Mapped[Optional[float]] = mapped_column(Float)
     total_debt:     Mapped[Optional[float]] = mapped_column(Float)
-    created_at:     Mapped[datetime]        = mapped_column(DateTime, default=datetime.utcnow)
+    created_at:     Mapped[datetime]        = mapped_column(DateTime, default=_utcnow)
 
     stock: Mapped["StockMaster"] = relationship(back_populates="fundamentals")
 
@@ -110,6 +121,8 @@ class FactorScore(Base):
     __tablename__ = "factor_scores"
     __table_args__ = (
         Index("ix_factor_scores_ticker_date", "ticker", "date"),
+        # One score row per (ticker, date) — guards the upsert race.
+        UniqueConstraint("ticker", "date", name="uq_factor_scores_ticker_date"),
     )
 
     id:              Mapped[int]   = mapped_column(Integer, primary_key=True)
@@ -126,7 +139,7 @@ class FactorScore(Base):
     momentum_3_1:    Mapped[Optional[float]] = mapped_column(Float)
     momentum_6_1:    Mapped[Optional[float]] = mapped_column(Float)
     volatility_60d:  Mapped[Optional[float]] = mapped_column(Float)
-    created_at:      Mapped[datetime]        = mapped_column(DateTime, default=datetime.utcnow)
+    created_at:      Mapped[datetime]        = mapped_column(DateTime, default=_utcnow)
 
     stock: Mapped["StockMaster"] = relationship(back_populates="factor_scores")
 
@@ -142,7 +155,7 @@ class User(Base):
     hashed_pw:  Mapped[str]  = mapped_column(String(255))
     plan:       Mapped[str]  = mapped_column(String(20), default="free")
     is_active:  Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     portfolios:     Mapped[list["Portfolio"]] = relationship(back_populates="user")
     watchlists:     Mapped[list["Watchlist"]] = relationship(back_populates="user")
@@ -163,7 +176,7 @@ class Portfolio(Base):
     currency:    Mapped[str]  = mapped_column(String(3), default="INR")
     benchmark:   Mapped[str]  = mapped_column(String(20), default="NIFTY50")
     description: Mapped[Optional[str]] = mapped_column(Text)
-    created_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at:  Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     user:      Mapped["User"]        = relationship(back_populates="portfolios")
     positions: Mapped[list["Position"]] = relationship(back_populates="portfolio")
@@ -180,7 +193,7 @@ class Position(Base):
     ticker:       Mapped[str]   = mapped_column(String(20), nullable=False)
     quantity:     Mapped[float] = mapped_column(Float, nullable=False)
     avg_cost:     Mapped[float] = mapped_column(Float, nullable=False)
-    date_added:   Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    date_added:   Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     notes:        Mapped[Optional[str]] = mapped_column(Text)
 
     portfolio: Mapped["Portfolio"] = relationship(back_populates="positions")
@@ -196,7 +209,7 @@ class Watchlist(Base):
     user_id:    Mapped[int]   = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     name:       Mapped[str]   = mapped_column(String(100), nullable=False)
     tickers:    Mapped[list]  = mapped_column(JSONB, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     user: Mapped["User"] = relationship(back_populates="watchlists")
 
@@ -213,7 +226,7 @@ class Alert(Base):
     condition_type: Mapped[str] = mapped_column(String(50))
     threshold:    Mapped[float] = mapped_column(Float)
     status:       Mapped[str]  = mapped_column(String(20), default="active")
-    created_at:   Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at:   Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     user: Mapped["User"] = relationship(back_populates="alerts")
 
@@ -229,7 +242,7 @@ class GeneratedReport(Base):
     report_type: Mapped[str]  = mapped_column(String(50))
     content:     Mapped[str]  = mapped_column(Text, nullable=False)
     model_used:  Mapped[str]  = mapped_column(String(50))
-    created_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at:  Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     def __repr__(self):
         return f"<GeneratedReport {self.ticker} {self.report_type}>"
@@ -242,8 +255,8 @@ class Strategy(Base):
     user_id:     Mapped[int]  = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     name:        Mapped[str]  = mapped_column(String(100), nullable=False)
     rules_json:  Mapped[str]  = mapped_column(Text, default="{}")
-    created_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at:  Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at:  Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     user: Mapped["User"] = relationship(back_populates="strategies")
     backtest_runs: Mapped[list["BacktestRun"]] = relationship(back_populates="strategy")
@@ -262,7 +275,7 @@ class BacktestRun(Base):
     end_date:    Mapped[Date] = mapped_column(Date, nullable=False)
     results_json: Mapped[str] = mapped_column(Text, default="{}")
     status:      Mapped[str]  = mapped_column(String(20), default="pending")
-    created_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at:  Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     strategy: Mapped["Strategy"] = relationship(back_populates="backtest_runs")
     user: Mapped["User"] = relationship(back_populates="backtest_runs")

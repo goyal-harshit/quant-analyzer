@@ -1,25 +1,19 @@
-"""Earnings Router — Earnings center endpoints"""
+"""Earnings Router — real quarterly results (screener.in)."""
 
 from fastapi import APIRouter
-from services.data_service import data_service
+
+from . import service
 
 router = APIRouter()
 
 
 @router.get("/calendar")
 async def get_earnings_calendar():
-    """Get upcoming earnings calendar (placeholder for production)."""
-    return {
-        "upcoming": [],
-        "message": "Earnings calendar not yet connected. Connect NSE/BSE corporate announcements API.",
-    }
+    """Recently-reported quarterly results across the liquid universe."""
+    return await service.get_calendar()
 
 
 @router.get("/{ticker}/history")
 async def get_earnings_history(ticker: str):
-    """Get earnings history for a ticker."""
-    return {
-        "ticker": ticker.upper(),
-        "history": [],
-        "message": "Earnings history not yet connected. Connect SEC EDGAR or NSE announcements.",
-    }
+    """Latest reported quarterly figures for a ticker."""
+    return await service.get_ticker_earnings(ticker)

@@ -3,8 +3,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { TrendingUp, TrendingDown, RefreshCw, Layers } from 'lucide-react'
+import { TrendingUp, TrendingDown, RefreshCw, Layers, GitCompareArrows, LineChart, Grid3x3, Filter, ArrowUpRight } from 'lucide-react'
 import { useMarketSummary, useTopGainersLosers, useSectorPerformance, useFactorSignals } from '@/lib/hooks'
+import { useAuth } from '@/components/auth/AuthProvider'
 import PageShell from '@/components/layout/PageShell'
 import Card from '@/components/ui/Card'
 import { scoreColor } from '@/lib/stockData'
@@ -54,8 +55,32 @@ const DEMO_SECTOR_PERF: Record<string, { '1d': number }> = {
   'Utilities': { '1d': -1.02 },
 }
 
+const QUICK_ACTIONS = [
+  { label: 'Compare Stocks', href: '/compare', icon: GitCompareArrows, hint: 'Side-by-side analysis' },
+  { label: 'Paper Trade', href: '/simulator', icon: LineChart, hint: 'Practice with ₹ virtual' },
+  { label: 'Sector Heatmap', href: '/sectors', icon: Grid3x3, hint: 'Rotation & breadth' },
+  { label: 'Screener', href: '/screener', icon: Filter, hint: 'Filter the universe' },
+]
+
+// Dashboard summary index names → Yahoo symbols (for the clickable detail links).
+const INDEX_SYMBOL: Record<string, string> = {
+  'NIFTY 50': '^NSEI',
+  'SENSEX': '^BSESN',
+  'BANK NIFTY': '^NSEBANK',
+  'INDIA VIX': '^INDIAVIX',
+}
+
+function greeting(): string {
+  // IST hour for an India-first product.
+  const h = Number(new Date().toLocaleString('en-US', { hour: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }))
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export default function Dashboard() {
   const router = useRouter()
+  const { user } = useAuth()
   const [refreshSeed, setRefreshSeed] = useState(0)
 
   // Real hooks querying backend APIs
@@ -68,7 +93,10 @@ export default function Dashboard() {
     router.push(`/stocks/${ticker}`)
   }
 
-  const isLoading = indicesLoading || moversLoading || sectorsLoading || factorsLoading
+  // Only block the first paint on the fast indices query. The heavier sections
+  // (movers, sectors, factor signals) fill in with their own inline loaders, so
+  // the page appears immediately instead of waiting on the slowest fetch.
+  const isLoading = indicesLoading && !indices
 
   if (isLoading) {
     return (
@@ -85,6 +113,35 @@ export default function Dashboard() {
   const resolvedSectorPerf = (sectorPerf && Object.keys(sectorPerf).length > 0) ? sectorPerf : DEMO_SECTOR_PERF
   const resolvedFactorSignals = ((factorSignals as any)?.signals?.length) ? factorSignals : DEMO_FACTOR_SIGNALS
   const isDemo = !indices || (Array.isArray(indices) && indices.length === 0)
+
+  // Key market insight, derived from live indices + sector breadth.
+  const nifty = rawIndices.find((i: any) => i.name === 'NIFTY 50') || rawIndices[0]
+  const sectorEntries = Object.entries(sectorPerf || {})
+    .map(([name, v]: any) => ({ name, d: v?.['1d'] }))
+    .filter((x) => typeof x.d === 'number')
+    .sort((a, b) => b.d - a.d)
+  const bestSector = sectorEntries[0]
+  const worstSector = sectorEntries[sectorEntries.length - 1]
+  const niftyUp = (nifty?.change_pct ?? 0) >= 0
+  const userName = user?.email ? user.email.split('@')[0] : null
+
+  // Data freshness: surface when any feed fell back to cached/seed data so
+  // delayed numbers are never silently presented as live.
+  const anySeed = rawIndices.some((i: any) => i.source && i.source !== 'live')
+  const latestAsOf = rawIndices
+    .map((i: any) => i.as_of)
+    .filter(Boolean)
+    .sort()
+    .pop()
+  const asOfLabel = latestAsOf
+    ? new Date(latestAsOf).toLocaleString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: 'short',
+        timeZone: 'Asia/Kolkata',
+      })
+    : null
 
   return (
     <PageShell
@@ -107,21 +164,103 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Hero: greeting + live market insight + quick actions */}
+      <Card padding="md" className="bg-gradient-to-br from-brand/10 via-card to-card border-brand/20">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-textPrimary">
+              {greeting()}{userName ? <span className="capitalize">, {userName}</span> : ''} 👋
+            </h2>
+            <p className="text-sm text-textSub mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className={niftyUp ? 'text-success font-semibold' : 'text-danger font-semibold'}>
+                {niftyUp ? '📈' : '📉'} Markets {niftyUp ? 'up' : 'down'} {Math.abs(nifty?.change_pct ?? 0).toFixed(2)}%
+              </span>
+              {bestSector && (
+                <span className="text-textMuted">
+                  · Best sector: <span className="text-success font-medium">{bestSector.name} {bestSector.d >= 0 ? '+' : ''}{bestSector.d.toFixed(2)}%</span>
+                </span>
+              )}
+              {worstSector && worstSector !== bestSector && (
+                <span className="text-textMuted">
+                  · Weakest: <span className="text-danger font-medium">{worstSector.name} {worstSector.d.toFixed(2)}%</span>
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {QUICK_ACTIONS.map(({ label, href, icon: Icon, hint }) => (
+              <button
+                key={href}
+                onClick={() => router.push(href)}
+                className="group flex flex-col gap-1 px-3 py-2.5 bg-elevated/60 hover:bg-elevated border border-border hover:border-brand/40 rounded-lg text-left transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <Icon className="w-4 h-4 text-brand" />
+                  <ArrowUpRight className="w-3.5 h-3.5 text-textMuted group-hover:text-brand transition-colors" />
+                </div>
+                <span className="text-xs font-semibold text-textPrimary leading-tight">{label}</span>
+                <span className="text-[10px] text-textMuted leading-tight">{hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* Data freshness indicator */}
+      <div className="flex items-center gap-2 -mt-2 mb-1">
+        <span
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+            anySeed
+              ? 'bg-danger/10 text-danger'
+              : 'bg-success/10 text-success'
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              anySeed ? 'bg-danger' : 'bg-success animate-pulse'
+            }`}
+          />
+          {anySeed ? 'Some feeds delayed (cached / offline)' : 'Live NSE/BSE'}
+        </span>
+        {asOfLabel && (
+          <span className="text-[11px] text-textMuted font-mono">
+            as of {asOfLabel} IST
+          </span>
+        )}
+      </div>
+
       {/* Index telemetry row */}
+      <div className="flex items-center justify-between -mb-2">
+        <span className="text-xs font-bold uppercase tracking-wider text-textMuted">Indices</span>
+        <button onClick={() => router.push('/indices')} className="flex items-center gap-1 text-xs font-semibold text-brand hover:text-brand/80">
+          View all 19 indices <ArrowUpRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {rawIndices.map((idx: any) => {
           const isPos = idx.change_pct >= 0
+          const isVix = idx.name === 'INDIA VIX'
+          const sym = INDEX_SYMBOL[idx.name]
           return (
-            <Card key={idx.name} padding="sm">
-              <div className="metric-label">{idx.name}</div>
+            <button
+              key={idx.name}
+              onClick={() => sym && router.push(`/indices/${encodeURIComponent(sym)}`)}
+              className="group text-left rounded-xl border border-border bg-card hover:border-brand/40 hover:bg-elevated/30 shadow-card p-3 transition-all"
+            >
+              <div className="flex items-center justify-between">
+                <div className="metric-label">{idx.name}</div>
+                <ArrowUpRight className="w-3.5 h-3.5 text-textMuted group-hover:text-brand transition-colors" />
+              </div>
               <div className="metric-value mt-1.5 text-2xl font-mono">
                 {idx.last ? idx.last.toLocaleString('en-IN') : 'N/A'}
               </div>
-              <div className={`flex items-center gap-1 font-mono text-xs font-semibold mt-1 ${isPos ? 'text-success' : 'text-danger'}`}>
+              <div className={`flex items-center gap-1 font-mono text-xs font-semibold mt-1 ${
+                isVix ? (isPos ? 'text-warn' : 'text-success') : (isPos ? 'text-success' : 'text-danger')
+              }`}>
                 {isPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                 {isPos ? '+' : ''}{(idx.change_pct ?? 0).toFixed(2)}%
               </div>
-            </Card>
+            </button>
           )
         })}
       </div>
@@ -146,6 +285,11 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
+                {factorsLoading && !((resolvedFactorSignals as any)?.signals?.length) && (
+                  <tr><td colSpan={5} className="py-8 text-center text-textMuted text-xs">
+                    <RefreshCw className="w-4 h-4 animate-spin inline mr-2 align-middle" />Ranking the universe…
+                  </td></tr>
+                )}
                 {((resolvedFactorSignals as any)?.signals ?? []).slice(0, 7).map((stk: any) => {
                   const isPos = stk.change_pct >= 0
                   return (
@@ -183,6 +327,11 @@ export default function Dashboard() {
         <Card padding="md">
           <Card.Header title="Sector Strengths" subtitle="Daily change across key industry indices" />
           <div className="space-y-3.5">
+            {sectorsLoading && !Object.keys(resolvedSectorPerf || {}).length && (
+              <div className="py-6 text-center text-textMuted text-xs">
+                <RefreshCw className="w-4 h-4 animate-spin inline mr-2 align-middle" />Loading sectors…
+              </div>
+            )}
             {Object.entries(resolvedSectorPerf || {}).slice(0, 6).map(([sec, val]: any) => {
               const isPos = val['1d'] >= 0
               return (
@@ -207,6 +356,11 @@ export default function Dashboard() {
         <Card padding="md">
           <Card.Header title="Top Movers — Gainers" icon={TrendingUp} />
           <div className="space-y-1">
+            {moversLoading && !(resolvedMovers?.gainers?.length) && (
+              <div className="py-6 text-center text-textMuted text-xs">
+                <RefreshCw className="w-4 h-4 animate-spin inline mr-2 align-middle" />Loading movers…
+              </div>
+            )}
             {(resolvedMovers?.gainers ?? []).map((stk: any) => (
               <div 
                 key={stk.ticker}
@@ -230,6 +384,11 @@ export default function Dashboard() {
         <Card padding="md">
           <Card.Header title="Top Movers — Losers" icon={TrendingDown} />
           <div className="space-y-1">
+            {moversLoading && !(resolvedMovers?.losers?.length) && (
+              <div className="py-6 text-center text-textMuted text-xs">
+                <RefreshCw className="w-4 h-4 animate-spin inline mr-2 align-middle" />Loading movers…
+              </div>
+            )}
             {(resolvedMovers?.losers ?? []).map((stk: any) => (
               <div 
                 key={stk.ticker}

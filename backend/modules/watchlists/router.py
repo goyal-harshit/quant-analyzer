@@ -12,12 +12,25 @@ from services.auth_service import get_current_user
 
 router = APIRouter()
 
+MAX_WATCHLIST_TICKERS = 200
+
+
+def _validate_tickers(tickers: list[str]) -> list[str]:
+    """Bound the list size so a request can't store thousands of tickers."""
+    tickers = tickers or []
+    if len(tickers) > MAX_WATCHLIST_TICKERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A watchlist can hold at most {MAX_WATCHLIST_TICKERS} tickers",
+        )
+    return [t.strip().upper() for t in tickers if t and t.strip()]
+
 
 @router.post("", response_model=dict)
 async def create_watchlist(payload: WatchlistCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a new watchlist."""
     user_id = current_user.id
-    watchlist = Watchlist(user_id=user_id, name=payload.name, tickers=payload.tickers or [])
+    watchlist = Watchlist(user_id=user_id, name=payload.name, tickers=_validate_tickers(payload.tickers))
     db.add(watchlist)
     await db.commit()
     await db.refresh(watchlist)
@@ -69,7 +82,7 @@ async def update_watchlist_tickers(watchlist_id: int, tickers: list[str], db: As
     if not watchlist:
         raise HTTPException(status_code=404, detail="Watchlist not found")
 
-    watchlist.tickers = tickers
+    watchlist.tickers = _validate_tickers(tickers)
     await db.commit()
     return {"updated": True, "tickers": watchlist.tickers}
 

@@ -231,6 +231,8 @@ export default function LandingPage() {
 
   return (
     <>
+      {/* Inject raw CSS without React reconciling the text children — avoids a
+          server/client hydration mismatch on this large inline stylesheet. */}
       <style dangerouslySetInnerHTML={{ __html: SS }} />
       <div className="bg-grid" />
 
@@ -296,7 +298,7 @@ export default function LandingPage() {
                   <div key={i} className="stream-item">
                     <span className="si-ticker">{s.ticker}</span>
                     <span className="si-name">{s.name}</span>
-                    <span className="si-price">₹{s.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                    <span className="si-price">₹{(s.price ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                     <span className={`si-chg ${cls}`}>{sign}{chg.toFixed(2)}%</span>
                   </div>
                 )
@@ -370,7 +372,7 @@ export default function LandingPage() {
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <span className="live-badge">● LIVE</span>
-                  <span style={{fontSize:'0.7rem',color:'var(--text-muted)',fontFamily:'var(--font-mono)'}}>{new Date().toLocaleDateString('en-IN', {weekday:'short',day:'numeric',month:'short',year:'numeric'})}</span>
+                  <span suppressHydrationWarning style={{fontSize:'0.7rem',color:'var(--text-muted)',fontFamily:'var(--font-mono)'}}>{new Date().toLocaleDateString('en-IN', {weekday:'short',day:'numeric',month:'short',year:'numeric'})}</span>
                 </div>
               </div>
               <div className="dash-body">

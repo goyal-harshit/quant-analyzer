@@ -9,6 +9,7 @@ and IPO data — both of which NSE serves freely (no API key) and keeps current.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -29,15 +30,30 @@ _client: httpx.AsyncClient | None = None
 _warmed_at: float = 0.0
 _WARM_TTL = 600  # re-warm cookies every 10 min
 
+# NSE now 403s the bare homepage, but it still sets a seed cookie there; a
+# follow-up data/report page then returns 200 and completes the cookie set the
+# public APIs need. Hit the homepage first (even on 403), then keep going until a
+# page returns 200 (cookies accumulate on the shared client regardless of status).
+_WARM_PAGES = (
+    "/",
+    "/market-data/all-upcoming-issues-ipo",
+    "/option-chain",
+)
+# Serialise client creation and cookie warming so concurrent callers don't race
+# on the module-level globals or warm the cookies multiple times in parallel.
+_lock = asyncio.Lock()
+
 
 async def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(
-            timeout=httpx.Timeout(12.0, connect=6.0),
-            headers=_HEADERS,
-            follow_redirects=True,
-        )
+        async with _lock:
+            if _client is None:
+                _client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(12.0, connect=6.0),
+                    headers=_HEADERS,
+                    follow_redirects=True,
+                )
     return _client
 
 
@@ -45,14 +61,25 @@ async def _warm(force: bool = False) -> None:
     global _warmed_at
     if not force and (time.time() - _warmed_at) < _WARM_TTL:
         return
-    client = await _get_client()
-    try:
-        await client.get(_BASE, headers={**_HEADERS, "Accept": "text/html"})
-        # A second hit on a report page solidifies the cookie set.
-        await client.get(f"{_BASE}/option-chain", headers={**_HEADERS, "Accept": "text/html"})
+    async with _lock:
+        # Re-check under the lock — another coroutine may have just warmed.
+        if not force and (time.time() - _warmed_at) < _WARM_TTL:
+            return
+        client = await _get_client()
+        warmed = False
+        for page in _WARM_PAGES:
+            try:
+                r = await client.get(f"{_BASE}{page}", headers={**_HEADERS, "Accept": "text/html"})
+                # Cookies accumulate on the shared client regardless of status; a
+                # 200 confirms a usable set, so stop there.
+                if r.status_code == 200:
+                    warmed = True
+                    break
+            except Exception as e:  # noqa: BLE001
+                logger.warning("NSE cookie warm via %s failed: %s", page, e)
         _warmed_at = time.time()
-    except Exception as e:  # noqa: BLE001
-        logger.warning("NSE cookie warm failed: %s", e)
+        if not warmed:
+            logger.warning("NSE cookie warm: no warm page returned 200")
 
 
 async def get_json(path: str, referer: str | None = None) -> dict | list | None:

@@ -9,8 +9,8 @@ router = APIRouter()
 
 @router.get("/search")
 async def search_stocks(q: str = Query(..., description="Search by company name or ticker")):
-    """Search for stocks by company name or ticker symbol."""
-    return service.search(q)
+    """Search for stocks by company name or ticker symbol (market-wide via Yahoo)."""
+    return await service.search(q)
 
 
 @router.get("/{ticker}/quote")

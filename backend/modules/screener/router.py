@@ -124,16 +124,23 @@ async def screen_stocks(filters: ScreenerFilter):
         def n(v):
             return None if (isinstance(v, float) and pd.isna(v)) else v
 
-        def get_factor(name):
-            if cache_hit:
-                return cache_hit.get(name)
+        def pick(cache_name, series):
+            # Prefer the cached value when present. Use `is not None` (not `or`) so a
+            # genuine 0/0.0 score isn't treated as falsy and recomputed.
+            if cache_hit is not None:
+                cv = cache_hit.get(cache_name)
+                if cv is not None:
+                    return cv
+            sv = series.get(ticker) if ticker in series.index else None
+            if sv is not None and not pd.isna(sv):
+                return round(float(sv), 1)
             return None
 
-        mom = get_factor("momentum") or (round(float(momentum_scores.get(ticker, 0)), 1) if ticker in momentum_scores.index and not pd.isna(momentum_scores.get(ticker)) else None)
-        qua = get_factor("quality") or (round(float(quality_scores.get(ticker, 0)), 1) if ticker in quality_scores.index and not pd.isna(quality_scores.get(ticker)) else None)
-        val = get_factor("value") or (round(float(value_scores.get(ticker, 0)), 1) if ticker in value_scores.index and not pd.isna(value_scores.get(ticker)) else None)
-        gro = get_factor("growth") or (round(float(growth_scores.get(ticker, 0)), 1) if ticker in growth_scores.index and not pd.isna(growth_scores.get(ticker)) else None)
-        comp = get_factor("composite") or (round(float(composite_scores.get(ticker, 0)), 1) if ticker in composite_scores.index and not pd.isna(composite_scores.get(ticker)) else None)
+        mom = pick("momentum", momentum_scores)
+        qua = pick("quality", quality_scores)
+        val = pick("value", value_scores)
+        gro = pick("growth", growth_scores)
+        comp = pick("composite", composite_scores)
 
         change_pct = n(round(((price - prev_close) / prev_close) * 100, 2) if prev_close else 0)
         sector_val = fund.get("sector")
@@ -183,8 +190,20 @@ async def screen_stocks(filters: ScreenerFilter):
         filtered = [r for r in filtered if r.composite_score and r.composite_score >= filters.min_composite]
 
     reverse = filters.sort_dir == "desc"
-    sort_field = filters.sort_by if hasattr(ScreenerResult, filters.sort_by) else "composite_score"
-    filtered.sort(key=lambda r: getattr(r, sort_field) or 0, reverse=reverse)
+    # Allowlist sortable fields — never getattr() an arbitrary user-supplied name,
+    # which could expose model internals/methods. Map a few friendly aliases too.
+    _SORTABLE = {
+        "composite", "composite_score", "momentum_score", "quality_score",
+        "value_score", "growth_score", "pe_ratio", "pb_ratio", "roe",
+        "revenue_growth", "market_cap", "price", "change_pct",
+    }
+    _ALIASES = {
+        "composite": "composite_score", "momentum": "momentum_score",
+        "quality": "quality_score", "value": "value_score", "growth": "growth_score",
+    }
+    requested = filters.sort_by if filters.sort_by in _SORTABLE else "composite_score"
+    sort_field = _ALIASES.get(requested, requested)
+    filtered.sort(key=lambda r: getattr(r, sort_field, None) or 0, reverse=reverse)
 
     paginated = filtered[filters.offset: filters.offset + filters.limit]
 

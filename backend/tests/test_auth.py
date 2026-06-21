@@ -3,13 +3,13 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_auth_flow(client: AsyncClient):
-    # Test registration
+    # Test registration — returns 201 with the created user (no token).
     reg_response = await client.post(
         "/api/v1/auth/register",
         json={"email": "testuser@example.com", "password": "securepassword123"}
     )
-    assert reg_response.status_code == 200
-    assert "access_token" in reg_response.json()
+    assert reg_response.status_code == 201
+    assert reg_response.json()["email"] == "testuser@example.com"
     
     # Test duplicate registration
     dup_response = await client.post(

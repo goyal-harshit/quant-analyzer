@@ -90,6 +90,15 @@ Audited every page/endpoint for stale data and functional bugs. Fixes:
 
 Key constraint: free Indian data is fragile under load — screener.in blocks bursts, NSE needs cookie warming, Yahoo's library endpoints 429 (only the v8 chart API works). Always throttle batch fundamental fetches.*
 
+## Audit-report fixes (2026-06-20)
+
+Acted on `QuantAI_Audit_Report.docx`. Fixed the crash/correctness/UI items:
+- **Backend**: `factor_engine.z_score` div-by-zero (the `.replace(0,1)` no-op on a scalar); `seed_data` EXTRA_STOCKS no longer overwrites rich 13-field STOCK_MASTER entries; `cache_service` correct async detection (`iscoroutine`) + in-memory TTL/size bound; `auth_service` generates+persists a random JWT secret instead of the known default; alerts `delete` ownership check (IDOR); removed hardcoded stale index fallback (NIFTY=25123…) from `data_service.get_market_summary`; AI report null-unpack guard; `fast_data` change_pct 0.0-is-falsy bug.
+- **Frontend**: added `<Toaster/>` to layout (toasts were invisible app-wide); fixed Rules-of-Hooks violation in portfolio (hook after early return); fixed setState-during-render in watchlists; fixed invalid `justifyContent:'between'` → `'space-between'` on 4 pages; aligned globals.css color vars to the `T` tokens (single source of truth); added 401 response interceptor (expired token → clear + redirect to login); fixed Header `collapsed-sibling` invalid class (now collapse-aware via prop).
+- **New pages**: `/notifications` (live feed: open/upcoming IPOs, top movers, VIX — wired to the header bell) and `/profile` (account details + quick links + sign-out — wired to the header avatar; guest state when logged out).
+
+Deliberately deferred (larger architectural work, not needed for "runs smoother"): app-wide auth-gating of public routes (would break the current token-less frontend), httpOnly-cookie auth + refresh tokens, rate limiting, Alembic migrations, next/font swap, mobile hamburger/focus-traps, circuit breakers, real earnings/news sources, comprehensive tests + CI/CD.*
+
 ## Data Source Strategy
 
 | Source | Purpose | Priority |

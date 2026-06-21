@@ -325,7 +325,12 @@ class FactorEngine:
     @staticmethod
     def z_score(series: pd.Series) -> pd.Series:
         """Cross-sectional z-score normalisation."""
-        return (series - series.mean()) / series.std().replace(0, 1)
+        std = series.std()
+        # std() returns a scalar; guard against zero/NaN division (the old
+        # `.replace(0, 1)` was a no-op on a float and didn't prevent div-by-zero).
+        if not std or pd.isna(std) or std < 1e-10:
+            std = 1.0
+        return (series - series.mean()) / std
 
 
 # ── PORTFOLIO ANALYTICS ───────────────────────────────────────────

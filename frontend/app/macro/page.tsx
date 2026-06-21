@@ -13,7 +13,7 @@ function CT({ active, payload, label }: { active?: any; payload?: any; label?: a
   return (
     <div style={{ background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
       <div style={{ color: T.muted, marginBottom: 4 }}>{label}</div>
-      {payload.map((p, i) => (
+      {payload.map((p: any, i: number) => (
         <div key={i} style={{ color: p.color || T.text, fontFamily: T.mono }}>
           {p.name && <span style={{ color: T.sub }}>{p.name}: </span>}
           {typeof p.value === 'number' ? p.value.toFixed(2) : p.value}
@@ -45,7 +45,7 @@ export default function MacroDashboard() {
 
   return (
     <div style={{ padding: '26px 30px', maxWidth: 1200, fontFamily: T.sans }}>
-      <div style={{ marginBottom: 22, display: 'flex', justifyContent: 'between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 22, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Macro Dashboard</div>
           <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>

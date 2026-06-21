@@ -18,7 +18,7 @@ import logging
 import os
 import random
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pandas as pd
@@ -181,6 +181,15 @@ class DataService:
                 pass
 
         if df is not None and not df.empty:
+            # Normalise column names to lowercase OHLCV so every downstream caller
+            # can rely on df["close"] regardless of which source produced the frame
+            # (jugaad/yfinance return "Close", fast_data returns "close").
+            df = df.copy()
+            # yfinance can return a MultiIndex (e.g. ("Close", "RELIANCE.NS")) —
+            # take the OHLCV level so the lowercase name still matches "close".
+            df.columns = [
+                str(c[0] if isinstance(c, tuple) else c).lower() for c in df.columns
+            ]
             price_cache[cache_key] = df
             try:
                 r = await _get_redis()
@@ -256,7 +265,7 @@ class DataService:
         try:
             import yfinance as yf
             nse_ticker = ticker if (ticker.startswith("^") or "." in ticker) else f"{ticker}.NS"
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             df = await _yfinance_retry(lambda: loop.run_in_executor(
                 None, lambda: yf.download(nse_ticker, period=period, interval=interval, progress=False, auto_adjust=True)
             ))
@@ -366,7 +375,7 @@ class DataService:
         try:
             import yfinance as yf
             nse_ticker = f"{ticker}.NS"
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def _fetch():
                 tk = yf.Ticker(nse_ticker)
@@ -611,7 +620,7 @@ class DataService:
         try:
             import yfinance as yf
             nse_ticker = ticker if (ticker.startswith("^") or "." in ticker) else f"{ticker}.NS"
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def _fetch():
                 info = yf.Ticker(nse_ticker).info
@@ -789,10 +798,15 @@ class DataService:
                         "last": round(q["price"], 2),
                         "change": round(q.get("change", 0.0), 2),
                         "change_pct": round(q.get("change_pct", 0.0), 2),
+                        "source": q.get("source", "live"),
+                        "as_of": q.get("as_of"),
                     })
         except Exception as e:
             logger.warning(f"Failed to fetch live market indices: {e}")
 
+        # Only if the live source missed some indices, backfill from the daily
+        # seed indices. No hardcoded constants — a fixed NIFTY=25123 would render
+        # stale/wrong; better to show fewer cards than fabricated numbers.
         if len(results) < 4:
             try:
                 import services.seed_data as _sd
@@ -800,25 +814,12 @@ class DataService:
                 existing_names = {r["name"] for r in results}
                 for idx in seed_indices:
                     if idx["name"] not in existing_names:
+                        # Flag fallback rows so the UI can show "delayed/offline"
+                        # instead of silently presenting seed numbers as live.
+                        idx.setdefault("source", "seed")
                         results.append(idx)
             except Exception:
                 pass
-
-        standard_names = {
-            "NIFTY 50": 25123.0,
-            "SENSEX": 82145.0,
-            "BANK NIFTY": 51200.0,
-            "INDIA VIX": 15.4,
-        }
-        existing_names = {r["name"] for r in results}
-        for name, default_val in standard_names.items():
-            if name not in existing_names:
-                results.append({
-                    "name": name,
-                    "last": default_val,
-                    "change": 0.0,
-                    "change_pct": 0.0,
-                })
         return results
 
     async def get_batch_quotes(self, tickers: list[str], refresh: bool = False) -> dict:
@@ -939,7 +940,7 @@ class DataService:
                     for t, v in zip(ts, closes):
                         if v is not None:
                             pts.append({
-                                "date": datetime.utcfromtimestamp(t).strftime("%Y-%m-%d"),
+                                "date": datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d"),
                                 "value": round(float(v), 2),
                             })
                     # thin to ~60 points for the chart
@@ -974,8 +975,13 @@ class DataService:
         out: dict = {"fii": [], "dii": [], "latest": None, "date": None}
         try:
             from services.nse_live import get_json as nse_get_json
-            data = await nse_get_json("/api/fiidiiTradeReact",
-                                      referer="https://www.nseindia.com/reports/fii-dii")
+            # Hard cap the NSE call — it's frequently 403-blocked from datacenter
+            # IPs and the cookie re-warm/retry can otherwise take 30s+.
+            data = await asyncio.wait_for(
+                nse_get_json("/api/fiidiiTradeReact",
+                             referer="https://www.nseindia.com/reports/fii-dii"),
+                timeout=8.0,
+            )
             if isinstance(data, list) and data:
                 date_str = data[0].get("date")
                 fii_net = dii_net = None
@@ -996,16 +1002,18 @@ class DataService:
                     "latest": {"date": date_str, "fii_net": fii_net, "dii_net": dii_net},
                     "date": date_str,
                 }
-        except Exception as e:
+        except (Exception, asyncio.TimeoutError) as e:
             logger.warning(f"FII/DII live fetch failed: {e}")
 
-        if out["fii"] or out["dii"]:
-            try:
-                r = await _get_redis()
-                if r:
-                    await r.setex(cache_key, 1800, _json.dumps(out))
-            except Exception:
-                pass
+        try:
+            r = await _get_redis()
+            if r:
+                # Cache success for 30 min; cache an empty result briefly (2 min)
+                # so we don't re-hit the slow/blocked NSE endpoint every request.
+                ttl = 1800 if (out["fii"] or out["dii"]) else 120
+                await r.setex(cache_key, ttl, _json.dumps(out))
+        except Exception:
+            pass
         return out
 
 

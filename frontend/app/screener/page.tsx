@@ -7,14 +7,14 @@ import { T, pct } from '@/lib/stockData'
 import { useScreener, useSectors } from '@/lib/hooks'
 
 const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
-const sc = v => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
+const sc = (v: number) => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
 
-function Badge({ v }) {
+function Badge({ v }: { v: any }) {
   const c = sc(v)
   return <span style={{ background: `${c}22`, color: c, border: `1px solid ${c}44`, borderRadius: 4, padding: '2px 9px', fontSize: 12, fontFamily: T.mono, fontWeight: 700 }}>{v !== null && v !== undefined ? Math.round(v) : 'N/A'}</span>
 }
 
-function Tag({ children, color = '#a78bfa' }) {
+function Tag({ children, color = '#a78bfa' }: { children: any; color?: string }) {
   return <span style={{ background: `${color}22`, color, border: `1px solid ${color}44`, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{children}</span>
 }
 
@@ -74,7 +74,7 @@ export default function Screener() {
 
   return (
     <div style={{ padding: '26px 30px', maxWidth: 1400, fontFamily: T.sans }}>
-      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Factor Screener</div>
           <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>
@@ -157,10 +157,10 @@ export default function Screener() {
           ].map(({ label, k, max }) => (
             <div key={k} style={{ minWidth: 110 }}>
               <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>
-                {label}: <span style={{ color: T.blue, fontFamily: T.mono }}>{flt[k]}</span>
+                {label}: <span style={{ color: T.blue, fontFamily: T.mono }}>{flt[k as keyof typeof flt]}</span>
               </div>
               <input
-                type="range" min={0} max={max} value={flt[k]}
+                type="range" min={0} max={max} value={flt[k as keyof typeof flt]}
                 onChange={e => setFlt(f => ({ ...f, [k]: +e.target.value }))}
                 style={{ width: '100%', accentColor: T.blue }}
               />
