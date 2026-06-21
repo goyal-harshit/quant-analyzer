@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, Filter, Target, RefreshCw, Globe, MessageSquare, Zap, Cpu, LogOut, User, Menu, Star, PiggyBank, Rocket } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
+import { useEffect, useState } from 'react'
 
 const NAV = [
   { id: 'dashboard', icon: Home, label: 'Dashboard', href: '/dashboard' },
@@ -26,6 +27,16 @@ interface SidebarProps {
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
+  const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'active' | 'unavailable'>('checking')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 2000)
+    fetch('http://localhost:11434/api/tags', { signal: controller.signal })
+      .then(() => setOllamaStatus('active'))
+      .catch(() => setOllamaStatus('unavailable'))
+      .finally(() => clearTimeout(timer))
+  }, [])
 
   if (pathname === '/' || pathname === '/login' || pathname === '/register') return null
 
@@ -108,16 +119,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </Link>
         )}
 
-        {!collapsed && (
+        {!collapsed && ollamaStatus !== 'checking' && (
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
-              <Cpu className="w-3 h-3 text-success" />
-              <span className="text-[10px] text-success font-semibold tracking-wider font-mono uppercase">
-                Ollama • Active
+              <Cpu className={`w-3 h-3 ${ollamaStatus === 'active' ? 'text-success' : 'text-textMuted'}`} />
+              <span className={`text-[10px] font-semibold tracking-wider font-mono uppercase ${ollamaStatus === 'active' ? 'text-success' : 'text-textMuted'}`}>
+                Ollama • {ollamaStatus === 'active' ? 'Active' : 'Unavailable'}
               </span>
             </div>
             <div className="text-[10px] text-textMuted leading-relaxed">
-              No API charges • local server
+              {ollamaStatus === 'active' ? 'No API charges • local server' : 'AI chat disabled • run Ollama locally'}
             </div>
           </div>
         )}
