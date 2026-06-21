@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { toast } from 'react-hot-toast'
-import { Sparkles, Mail, Lock, ArrowRight, UserPlus } from 'lucide-react'
+import { Sparkles, Mail, Lock, ArrowRight, UserPlus, Eye } from 'lucide-react'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -12,6 +13,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const { register } = useAuth()
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,7 +32,11 @@ export default function RegisterPage() {
       await register(email, password)
       toast.success('Account created successfully!')
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || 'Registration failed')
+      if (!err.response) {
+        toast.error('Backend not reachable. Use "Explore as Guest" to browse without an account.')
+      } else {
+        toast.error(err.response?.data?.detail || 'Registration failed')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -105,8 +111,25 @@ export default function RegisterPage() {
           </button>
         </form>
 
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-border/50" />
+          <span className="text-[10px] text-textMuted uppercase tracking-widest">or</span>
+          <div className="flex-1 h-px bg-border/50" />
+        </div>
+
+        {/* Guest access */}
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-elevated hover:bg-border/40 border border-border/60 hover:border-brand/30 text-textSub hover:text-textPrimary rounded-lg text-sm font-medium transition-all"
+        >
+          <Eye className="w-4 h-4" />
+          Explore as Guest
+          <span className="text-[10px] text-textMuted">(no account needed)</span>
+        </button>
+
         {/* Footer */}
-        <div className="text-center text-xs text-textMuted pt-2">
+        <div className="text-center text-xs text-textMuted">
           <span>Already have an account? </span>
           <Link href="/login" className="text-brand hover:underline font-medium">
             Sign In
