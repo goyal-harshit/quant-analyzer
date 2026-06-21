@@ -16,6 +16,17 @@ import StockChart from '@/components/stocks/StockChart'
 import FundamentalsPanel from '@/components/stocks/FundamentalsPanel'
 import { scoreColor } from '@/lib/stockData'
 
+export function generateStaticParams() {
+  const tickers = [
+    'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
+    'HINDUNILVR', 'SBIN', 'BHARTIARTL', 'ITC', 'KOTAKBANK',
+    'LT', 'AXISBANK', 'WIPRO', 'HCLTECH', 'ASIANPAINT',
+    'MARUTI', 'SUNPHARMA', 'TITAN', 'BAJFINANCE', 'NESTLEIND',
+    'ULTRACEMCO', 'POWERGRID', 'NTPC', 'ONGC', 'JSWSTEEL',
+  ]
+  return tickers.map((ticker) => ({ ticker }))
+}
+
 export default function StockDetail() {
   const params = useParams()
   const router = useRouter()
