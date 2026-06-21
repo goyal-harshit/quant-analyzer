@@ -9,6 +9,51 @@ import PageShell from '@/components/layout/PageShell'
 import Card from '@/components/ui/Card'
 import { scoreColor } from '@/lib/stockData'
 
+const DEMO_INDICES = [
+  { name: 'NIFTY 50', last: 24857.3, change_pct: 0.62 },
+  { name: 'SENSEX', last: 81721.1, change_pct: 0.58 },
+  { name: 'NIFTY BANK', last: 53412.8, change_pct: -0.31 },
+  { name: 'NIFTY IT', last: 38194.5, change_pct: 1.24 },
+]
+
+const DEMO_FACTOR_SIGNALS = {
+  signals: [
+    { ticker: 'RELIANCE', sector: 'Energy', price: 2847.5, change_pct: 0.82, composite_score: 78 },
+    { ticker: 'TCS', sector: 'IT', price: 3921.0, change_pct: 1.43, composite_score: 85 },
+    { ticker: 'HDFCBANK', sector: 'Banking', price: 1712.3, change_pct: -0.29, composite_score: 71 },
+    { ticker: 'INFY', sector: 'IT', price: 1843.6, change_pct: 2.11, composite_score: 82 },
+    { ticker: 'ICICIBANK', sector: 'Banking', price: 1284.9, change_pct: 0.55, composite_score: 76 },
+    { ticker: 'BHARTIARTL', sector: 'Telecom', price: 1672.4, change_pct: 1.87, composite_score: 80 },
+    { ticker: 'MARUTI', sector: 'Auto', price: 12340.0, change_pct: -0.48, composite_score: 66 },
+  ]
+}
+
+const DEMO_MOVERS = {
+  gainers: [
+    { ticker: 'INFY', name: 'Infosys Ltd', price: 1843.6, change_pct: 2.11 },
+    { ticker: 'BHARTIARTL', name: 'Bharti Airtel', price: 1672.4, change_pct: 1.87 },
+    { ticker: 'WIPRO', name: 'Wipro Ltd', price: 563.2, change_pct: 1.65 },
+    { ticker: 'HCLTECH', name: 'HCL Technologies', price: 1924.8, change_pct: 1.52 },
+    { ticker: 'TCS', name: 'Tata Consultancy', price: 3921.0, change_pct: 1.43 },
+  ],
+  losers: [
+    { ticker: 'ONGC', name: 'Oil & Natural Gas', price: 248.3, change_pct: -1.82 },
+    { ticker: 'POWERGRID', name: 'Power Grid Corp', price: 312.7, change_pct: -1.14 },
+    { ticker: 'NTPC', name: 'NTPC Ltd', price: 378.4, change_pct: -0.93 },
+    { ticker: 'MARUTI', name: 'Maruti Suzuki', price: 12340.0, change_pct: -0.48 },
+    { ticker: 'HDFCBANK', name: 'HDFC Bank', price: 1712.3, change_pct: -0.29 },
+  ],
+}
+
+const DEMO_SECTOR_PERF: Record<string, { '1d': number }> = {
+  'Information Technology': { '1d': 1.68 },
+  'Telecom': { '1d': 1.43 },
+  'Consumer Goods': { '1d': 0.74 },
+  'Financial Services': { '1d': 0.21 },
+  'Energy': { '1d': -0.38 },
+  'Utilities': { '1d': -1.02 },
+}
+
 export default function Dashboard() {
   const router = useRouter()
   const [refreshSeed, setRefreshSeed] = useState(0)
@@ -34,15 +79,19 @@ export default function Dashboard() {
     )
   }
 
-  // Handle API format: indices can be array or dict
-  const rawIndices = Array.isArray(indices) ? indices : []
+  // Fall back to demo data when backend is unavailable
+  const rawIndices = (Array.isArray(indices) && indices.length > 0) ? indices : DEMO_INDICES
+  const resolvedMovers = (movers?.gainers?.length) ? movers : DEMO_MOVERS
+  const resolvedSectorPerf = (sectorPerf && Object.keys(sectorPerf).length > 0) ? sectorPerf : DEMO_SECTOR_PERF
+  const resolvedFactorSignals = ((factorSignals as any)?.signals?.length) ? factorSignals : DEMO_FACTOR_SIGNALS
+  const isDemo = !indices || (Array.isArray(indices) && indices.length === 0)
 
   return (
-    <PageShell 
-      title="Quant Terminal" 
+    <PageShell
+      title="Quant Terminal"
       subtitle="Real-time multi-factor signals & market telemetry"
       actions={
-        <button 
+        <button
           onClick={() => { setRefreshSeed(prev => prev + 1) }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-elevated hover:bg-border border border-border rounded-lg text-xs font-semibold text-textSub hover:text-textPrimary transition-all"
         >
@@ -51,6 +100,13 @@ export default function Dashboard() {
         </button>
       }
     >
+      {isDemo && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-warn/10 border border-warn/30 text-warn text-xs font-medium">
+          <span>⚠</span>
+          <span>Live backend not connected — showing demo data. Deploy the backend on Render to see real NSE/BSE feeds.</span>
+        </div>
+      )}
+
       {/* Index telemetry row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {rawIndices.map((idx: any) => {
@@ -90,7 +146,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
-                {((factorSignals as any)?.signals ?? []).slice(0, 7).map((stk: any) => {
+                {((resolvedFactorSignals as any)?.signals ?? []).slice(0, 7).map((stk: any) => {
                   const isPos = stk.change_pct >= 0
                   return (
                     <tr 
@@ -127,7 +183,7 @@ export default function Dashboard() {
         <Card padding="md">
           <Card.Header title="Sector Strengths" subtitle="Daily change across key industry indices" />
           <div className="space-y-3.5">
-            {Object.entries(sectorPerf || {}).slice(0, 6).map(([sec, val]: any) => {
+            {Object.entries(resolvedSectorPerf || {}).slice(0, 6).map(([sec, val]: any) => {
               const isPos = val['1d'] >= 0
               return (
                 <div key={sec} className="flex justify-between items-center py-1.5 border-b border-border/30 last:border-0">
@@ -151,7 +207,7 @@ export default function Dashboard() {
         <Card padding="md">
           <Card.Header title="Top Movers — Gainers" icon={TrendingUp} />
           <div className="space-y-1">
-            {(movers?.gainers ?? []).map((stk: any) => (
+            {(resolvedMovers?.gainers ?? []).map((stk: any) => (
               <div 
                 key={stk.ticker}
                 onClick={() => handleStockClick(stk.ticker)}
@@ -174,7 +230,7 @@ export default function Dashboard() {
         <Card padding="md">
           <Card.Header title="Top Movers — Losers" icon={TrendingDown} />
           <div className="space-y-1">
-            {(movers?.losers ?? []).map((stk: any) => (
+            {(resolvedMovers?.losers ?? []).map((stk: any) => (
               <div 
                 key={stk.ticker}
                 onClick={() => handleStockClick(stk.ticker)}
