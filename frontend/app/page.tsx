@@ -231,7 +231,7 @@ export default function LandingPage() {
 
   return (
     <>
-      <style>{SS}</style>
+      <style dangerouslySetInnerHTML={{ __html: SS }} />
       <div className="bg-grid" />
 
       <nav>
