@@ -189,7 +189,7 @@ export const macroApi = {
 
 // ── AI ──────────────────────────────────────────────────────────
 export const aiApi = {
-  chat: (data: { messages: Array<{ role: string; content: string }>; context_ticker?: string }) =>
+  chat: (data: { messages: Array<{ role: string; content: string }>; context_ticker?: string; provider?: string; model?: string; api_key?: string }) =>
     client.post("/ai/chat", data).then((r) => r.data),
 
   generateReport: (ticker: string, reportType = "full") =>

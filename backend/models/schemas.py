@@ -319,6 +319,9 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     context_ticker: Optional[str] = None
+    provider: str = "ollama"
+    model: Optional[str] = None
+    api_key: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str

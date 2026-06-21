@@ -205,81 +205,182 @@ def buildOfflineChatReply(query: str) -> str:
 
 
 class AIService:
-    """
-    Thin wrapper around Ollama's local REST API.
-    No billing, no rate limits beyond your own hardware, no data leaves
-    your machine (or your self-hosted server) unless you choose to deploy
-    Ollama on a cloud VM yourself.
-    """
-
     def __init__(self):
-        self.client = httpx.AsyncClient(base_url=OLLAMA_HOST, timeout=120.0)
+        self.ollama_client = httpx.AsyncClient(base_url=OLLAMA_HOST, timeout=120.0)
+        self.http = httpx.AsyncClient(timeout=120.0)
 
-    async def _generate(self, system: str, messages: list[dict], max_tokens: int = 1000) -> dict:
-        """
-        Calls Ollama's /api/chat endpoint.
-        Falls back gracefully with a clear setup message if Ollama isn't
-        running — this is the only "failure mode" since there's no
-        billing/auth layer to break.
-        """
+    # ── PROVIDER BACKENDS ─────────────────────────────────────────
+
+    async def _ollama(self, system: str, messages: list[dict], max_tokens: int, model: str) -> dict:
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": model,
             "messages": [{"role": "system", "content": system}] + messages,
             "stream": False,
             "options": {"num_predict": max_tokens, "temperature": 0.4},
         }
         try:
-            resp = await self.client.post("/api/chat", json=payload)
+            resp = await self.ollama_client.post("/api/chat", json=payload)
             resp.raise_for_status()
             data = resp.json()
             content = data.get("message", {}).get("content", "")
             tokens = data.get("eval_count", 0) + data.get("prompt_eval_count", 0)
-            return {"content": content, "tokens": tokens, "source": "ollama"}
+            return {"content": content, "tokens": tokens, "source": "ollama", "model": model}
         except httpx.ConnectError:
-            logger.error("Ollama is not running.")
-            return {
-                "content": (
-                    f"⚠️ Local AI model unavailable. Ollama isn't running.\n\n"
-                    f"Start it with: `ollama serve`\n"
-                    f"Make sure the model is pulled: `ollama pull {OLLAMA_MODEL}`\n\n"
-                    f"This app uses a 100% free, self-hosted LLM — no payment or API key needed, "
-                    f"just Ollama running locally or on your own server."
-                ),
-                "tokens": 0, "source": "error",
-            }
+            return {"content": None, "tokens": 0, "source": "error",
+                    "error": f"Ollama not running. Start with: ollama serve && ollama pull {model}"}
         except Exception as e:
-            logger.error(f"Ollama call failed: {e}")
-            return {"content": f"AI generation failed: {str(e)}", "tokens": 0, "source": "error"}
+            return {"content": None, "tokens": 0, "source": "error", "error": str(e)}
+
+    async def _openai(self, system: str, messages: list[dict], max_tokens: int, model: str, api_key: str) -> dict:
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system}] + messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.4,
+        }
+        try:
+            resp = await self.http.post(
+                "https://api.openai.com/v1/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            tokens = data.get("usage", {}).get("total_tokens", 0)
+            return {"content": content, "tokens": tokens, "source": "openai", "model": model}
+        except Exception as e:
+            return {"content": None, "tokens": 0, "source": "error", "error": f"OpenAI error: {e}"}
+
+    async def _anthropic(self, system: str, messages: list[dict], max_tokens: int, model: str, api_key: str) -> dict:
+        payload = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": messages,
+        }
+        try:
+            resp = await self.http.post(
+                "https://api.anthropic.com/v1/messages",
+                json=payload,
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["content"][0]["text"]
+            tokens = data.get("usage", {}).get("input_tokens", 0) + data.get("usage", {}).get("output_tokens", 0)
+            return {"content": content, "tokens": tokens, "source": "anthropic", "model": model}
+        except Exception as e:
+            return {"content": None, "tokens": 0, "source": "error", "error": f"Anthropic error: {e}"}
+
+    async def _gemini(self, system: str, messages: list[dict], max_tokens: int, model: str, api_key: str) -> dict:
+        gemini_messages = [{"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]} for m in messages]
+        if gemini_messages and gemini_messages[0]["role"] == "model":
+            gemini_messages.insert(0, {"role": "user", "parts": [{"text": system}]})
+        payload = {
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": gemini_messages,
+            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.4},
+        }
+        try:
+            resp = await self.http.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["candidates"][0]["content"]["parts"][0]["text"]
+            tokens = data.get("usageMetadata", {}).get("totalTokenCount", 0)
+            return {"content": content, "tokens": tokens, "source": "gemini", "model": model}
+        except Exception as e:
+            return {"content": None, "tokens": 0, "source": "error", "error": f"Gemini error: {e}"}
+
+    async def _groq(self, system: str, messages: list[dict], max_tokens: int, model: str, api_key: str) -> dict:
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system}] + messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.4,
+        }
+        try:
+            resp = await self.http.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            tokens = data.get("usage", {}).get("total_tokens", 0)
+            return {"content": content, "tokens": tokens, "source": "groq", "model": model}
+        except Exception as e:
+            return {"content": None, "tokens": 0, "source": "error", "error": f"Groq error: {e}"}
+
+    # ── UNIFIED DISPATCH ──────────────────────────────────────────
+
+    async def _generate(
+        self,
+        system: str,
+        messages: list[dict],
+        max_tokens: int = 1000,
+        provider: str = "ollama",
+        model: str | None = None,
+        api_key: str | None = None,
+    ) -> dict:
+        if provider == "openai":
+            return await self._openai(system, messages, max_tokens, model or "gpt-4o-mini", api_key or "")
+        elif provider == "anthropic":
+            return await self._anthropic(system, messages, max_tokens, model or "claude-3-haiku-20240307", api_key or "")
+        elif provider == "gemini":
+            return await self._gemini(system, messages, max_tokens, model or "gemini-1.5-flash", api_key or "")
+        elif provider == "groq":
+            return await self._groq(system, messages, max_tokens, model or "llama-3.3-70b-versatile", api_key or "")
+        else:
+            return await self._ollama(system, messages, max_tokens, model or OLLAMA_MODEL)
 
     # ── CHAT ─────────────────────────────────────────────────────
-    async def chat(self, messages: list[dict], context_ticker: str | None = None) -> dict:
+    async def chat(
+        self,
+        messages: list[dict],
+        context_ticker: str | None = None,
+        provider: str = "ollama",
+        model: str | None = None,
+        api_key: str | None = None,
+    ) -> dict:
         system = SYSTEM_PROMPT_RESEARCH
         if context_ticker:
             system += f"\n\nThe user is currently viewing: {context_ticker}. Bias your answer toward this stock if relevant."
 
-        result = await self._generate(system, messages, max_tokens=300)
-        if result.get("source") == "ollama":
+        result = await self._generate(system, messages, max_tokens=300, provider=provider, model=model, api_key=api_key)
+        if result.get("content"):
             return {
                 "response": result["content"],
-                "model": OLLAMA_MODEL,
+                "model": result.get("model", model or provider),
                 "tokens_used": result["tokens"],
-                "source": "ollama",
+                "source": result["source"],
             }
         # Fallback to offline rule-based engine
         last_user_msg = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        offline_reply = buildOfflineChatReply(last_user_msg)
-        return {
-            "response": offline_reply,
-            "model": "offline-rule-engine",
-            "tokens_used": 0,
-            "source": "offline",
-        }
+        error_note = f"\n\n⚠️ {result.get('error', 'AI unavailable')}" if result.get("error") else ""
+        offline_reply = buildOfflineChatReply(last_user_msg) + error_note
+        return {"response": offline_reply, "model": "offline-rule-engine", "tokens_used": 0, "source": "offline"}
 
     # ── STOCK REPORT ─────────────────────────────────────────────
-    async def generate_stock_report(self, stock_data: dict, report_type: str = "full") -> str:
+    async def generate_stock_report(
+        self,
+        stock_data: dict,
+        report_type: str = "full",
+        provider: str = "ollama",
+        model: str | None = None,
+        api_key: str | None = None,
+    ) -> str:
         system_prompt = SYSTEM_PROMPT_ANALYST
         max_tokens = 1200
-        
+
         if report_type == "brief":
             system_prompt = """You are a quantitative equity analyst specializing in Indian equities.
 Provide a very brief 4-bullet analysis.
@@ -297,70 +398,56 @@ Factor Scores (0-100): Momentum {stock_data.get('momentum_score')} | Quality {st
             max_tokens = 300
         else:
             prompt = f"""Analyze {stock_data.get('name')} ({stock_data.get('ticker')}, NSE):
-
 Price: ₹{stock_data.get('price')} | Change: {stock_data.get('change_pct')}%
 Sector: {stock_data.get('sector')} | Market Cap: ₹{stock_data.get('market_cap')} Cr
-
 Valuation: PE {stock_data.get('pe_ratio')}x | PB {stock_data.get('pb_ratio')}x | EV/EBITDA {stock_data.get('ev_ebitda')}x
 Profitability: ROE {stock_data.get('roe')}% | ROA {stock_data.get('roa')}% | Net Margin {stock_data.get('net_margin')}%
 Growth: Revenue Growth {stock_data.get('revenue_growth')}% | Earnings Growth {stock_data.get('earnings_growth')}%
 Leverage: Debt/Equity {stock_data.get('debt_equity')}
+Factor Scores (0-100): Momentum {stock_data.get('momentum_score')} | Quality {stock_data.get('quality_score')} | Value {stock_data.get('value_score')} | Growth {stock_data.get('growth_score')} | Composite {stock_data.get('composite_score')}
+Report type: {report_type}"""
 
-Factor Scores (0-100 percentile vs Nifty 500):
-Momentum {stock_data.get('momentum_score')} | Quality {stock_data.get('quality_score')} | Value {stock_data.get('value_score')} | Growth {stock_data.get('growth_score')} | Composite {stock_data.get('composite_score')}
-
-Report type requested: {report_type}"""
-
-        result = await self._generate(system_prompt, [{"role": "user", "content": prompt}], max_tokens=max_tokens)
-        if result.get("source") == "ollama":
+        result = await self._generate(system_prompt, [{"role": "user", "content": prompt}], max_tokens=max_tokens, provider=provider, model=model, api_key=api_key)
+        if result.get("content"):
             return result["content"]
-        # Fallback to offline rule-based report
         ticker = stock_data.get("ticker", "").upper()
         stock = next((s for s in _STOCKS if s["ticker"] == ticker), None)
-        if stock:
-            return buildOfflineReport(stock)
-        return result["content"]
+        return buildOfflineReport(stock) if stock else (result.get("error") or "Analysis unavailable")
 
     # ── EARNINGS SUMMARY ─────────────────────────────────────────
-    async def summarise_earnings(self, ticker: str, raw_text: str) -> str:
+    async def summarise_earnings(self, ticker: str, raw_text: str, provider="ollama", model=None, api_key=None) -> str:
         prompt = f"Summarise this quarterly earnings release/transcript for {ticker}:\n\n{raw_text[:6000]}"
-        result = await self._generate(SYSTEM_PROMPT_EARNINGS, [{"role": "user", "content": prompt}], max_tokens=900)
-        return result["content"]
+        result = await self._generate(SYSTEM_PROMPT_EARNINGS, [{"role": "user", "content": prompt}], max_tokens=900, provider=provider, model=model, api_key=api_key)
+        return result.get("content") or result.get("error") or "Summary unavailable"
 
     # ── INVESTMENT THESIS ────────────────────────────────────────
-    async def generate_investment_thesis(self, stock_data: dict, portfolio_context: dict | None = None) -> str:
+    async def generate_investment_thesis(self, stock_data: dict, portfolio_context: dict | None = None, provider="ollama", model=None, api_key=None) -> str:
         context_str = f"\n\nUser's current portfolio context: {portfolio_context}" if portfolio_context else ""
         prompt = f"""Generate a structured bull case and bear case (NOT a recommendation) for {stock_data.get('name')} ({stock_data.get('ticker')}) based on this data:
-
-{stock_data}
-{context_str}
-
+{stock_data}{context_str}
 Format as:
 **Bull Case** (3 data-driven points)
 **Bear Case** (3 data-driven points)
 **What Would Change The Picture** (catalysts to watch)"""
-
-        result = await self._generate(SYSTEM_PROMPT_ANALYST, [{"role": "user", "content": prompt}], max_tokens=1000)
-        return result["content"]
+        result = await self._generate(SYSTEM_PROMPT_ANALYST, [{"role": "user", "content": prompt}], max_tokens=1000, provider=provider, model=model, api_key=api_key)
+        return result.get("content") or result.get("error") or "Thesis unavailable"
 
     # ── PORTFOLIO RISK NARRATIVE ─────────────────────────────────
-    async def analyse_portfolio_risk(self, portfolio_data: dict) -> str:
-        prompt = f"""Explain this Indian equity portfolio's risk profile in plain language for a retail investor:
-
+    async def analyse_portfolio_risk(self, portfolio_data: dict, provider="ollama", model=None, api_key=None) -> str:
+        prompt = f"""Explain this Indian equity portfolio's risk profile in plain language:
 Total Value: ₹{portfolio_data.get('total_value')}
 Beta vs Nifty 50: {portfolio_data.get('beta')}
 Sharpe Ratio: {portfolio_data.get('sharpe')}
 Volatility (annualised): {portfolio_data.get('volatility')}%
 Max Drawdown: {portfolio_data.get('max_drawdown')}%
 Sector Concentration: {portfolio_data.get('sector_weights')}
-
-Explain what these numbers mean practically, and flag any concentration or risk concerns visible in the data."""
-
-        result = await self._generate(SYSTEM_PROMPT_RESEARCH, [{"role": "user", "content": prompt}], max_tokens=800)
-        return result["content"]
+Flag any concentration or risk concerns."""
+        result = await self._generate(SYSTEM_PROMPT_RESEARCH, [{"role": "user", "content": prompt}], max_tokens=800, provider=provider, model=model, api_key=api_key)
+        return result.get("content") or result.get("error") or "Narrative unavailable"
 
     async def close(self):
-        await self.client.aclose()
+        await self.ollama_client.aclose()
+        await self.http.aclose()
 
 
 ai_service = AIService()

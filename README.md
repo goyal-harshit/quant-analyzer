@@ -1,182 +1,266 @@
 # QuantAI — India-First Quantitative Investment Analyzer
-### 100% Free · 100% Open-Source · Zero Payment, Anywhere
 
-This is a fully open-source rebuild — **no paid APIs, no paid data vendors, no cloud bills required**. Every single component can run for free, forever, on your own laptop or a free-tier server.
+> Full-stack quant platform for NSE/BSE equity research. Screener, backtester, portfolio tracker, macro dashboard, IPO tracker, mutual funds, and an AI chat that works with **any LLM** — Ollama (free, local), OpenAI, Anthropic, Gemini, or Groq.
 
-| Layer | Tool | License/Cost |
+**Live demo:** https://goyal-harshit.github.io/quant-analyzer
+
+---
+
+## What's inside
+
+| Layer | Tech | Cost |
 |---|---|---|
-| AI / LLM | **Ollama** + Llama 3.2 / Mistral / Qwen2.5 | Open-source, free, self-hosted |
-| India Market Data | **jugaad-data**, **nsepython**, **yfinance** | Open-source, free, no API key |
-| Macro Data | **RBI DBIE**, **MOSPI**, **data.gov.in**, **FRED** | Free, official government/public sources |
-| Database | **PostgreSQL** + **TimescaleDB** | Open-source, free, self-hosted |
-| Cache/Queue | **Redis** | Open-source, free, self-hosted |
-| Backend | **FastAPI** | Open-source, free |
-| Frontend | **Next.js**, **React**, **Tailwind** | Open-source, free |
-| Containers | **Docker Compose** | Free |
+| Frontend | Next.js 14 · TypeScript · Tailwind | Free |
+| Backend | FastAPI · Python 3.12 | Free |
+| Database | PostgreSQL (async, via SQLAlchemy) | Free |
+| Cache | Redis (optional — app runs without it) | Free |
+| Market data | Yahoo Finance v8 · NSE direct · mfapi | Free |
+| AI / LLM | **Your choice** — Ollama, OpenAI, Anthropic, Gemini, Groq | Free–paid |
+| Containers | Docker Compose | Free |
 
-Nothing in this stack requires a credit card at any point.
+---
 
-## What's Included
+## Quick start — Docker (recommended)
 
-- **Interactive demo** (`QuantAI_App.jsx`) — a fully working React app with 25 real NSE stocks and simulated price/factor data. Its AI features try to call a local Ollama instance (`http://localhost:11434`) first; if that's unreachable — which it will be in a sandboxed preview, since browsers can't reach services on your own machine from there — it automatically falls back to a deterministic, data-driven offline analysis engine, so every feature still works with zero setup.
-- **Full backend** (`/backend`) — FastAPI app with a real quant factor engine, an Ollama-powered AI service, and a data service chained across three free open-source India market data libraries with automatic fallback.
-- **Frontend scaffold** (`/frontend`) — Next.js + TypeScript + Tailwind, wired to the backend API.
-- **Docker Compose** — one command brings up Postgres+TimescaleDB, Redis, Ollama (with automatic model pull), the FastAPI backend, and the Next.js frontend.
-
-## Quick Start
-
-### Option 1 — Just run the interactive demo (zero setup)
-Open `QuantAI_App.jsx` as a Claude artifact or drop it into any React+Tailwind project. It works completely standalone with simulated data. The AI features will use the offline rule-based engine unless you also have Ollama running locally on the same machine viewing the page (see Option 3).
-
-### Option 2 — Full stack with Docker Compose (recommended)
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac/Linux)
+- Git
 
 ```bash
-# 1. Unzip the project
+git clone https://github.com/goyal-harshit/quant-analyzer.git
 cd quant-analyzer
-
-# 2. Set up environment variables (everything is free/optional)
 cp backend/.env.example backend/.env
-# No required edits — Ollama and free India data libraries need no keys.
-# FRED_API_KEY / DATA_GOV_IN_KEY are optional, free registrations that
-# only extend macro data coverage.
-
-# 3. Bring up the whole stack
 docker compose up --build
-
-# This automatically:
-#  - Starts PostgreSQL + TimescaleDB
-#  - Starts Redis
-#  - Starts Ollama and pulls the llama3.2 model (one-time, ~2GB download)
-#  - Starts the FastAPI backend on :8000
-#  - Starts the Next.js frontend on :3000
-
-# Backend API:  http://localhost:8000
-# API docs:     http://localhost:8000/docs
-# Frontend:     http://localhost:3000
-# Ollama:       http://localhost:11434
 ```
 
-First boot will take a few minutes while Ollama pulls the model (free download, one-time). After that, everything runs offline with no internet dependency except for live market data refreshes.
+Open http://localhost:3000 — the full stack is running.
 
-### Option 3 — Run Ollama + the demo together locally (get real LLM output)
+> First run pulls images (~2 GB). Subsequent starts are fast.
+
+---
+
+## Quick start — Without Docker
+
+### 1. Prerequisites
 
 ```bash
-# 1. Install Ollama (free, one-time)
-curl -fsSL https://ollama.com/install.sh | sh
+# Python 3.12+
+python --version
 
-# 2. Pull a free open-source model
-ollama pull llama3.2        # ~2GB, runs on 8GB RAM laptops
+# Node.js 18+
+node --version
 
-# 3. Start Ollama (it serves on localhost:11434 automatically)
-ollama serve
-
-# 4. Run the QuantAI_App.jsx demo in any local React dev server on the
-#    SAME machine — now its AI calls will reach your local Ollama and
-#    you'll get genuine LLM-generated analysis, completely free.
+# PostgreSQL running locally
+# Windows: https://www.postgresql.org/download/windows/
+# Mac:    brew install postgresql && brew services start postgresql
+# Linux:  sudo apt install postgresql && sudo service postgresql start
 ```
 
-### Option 4 — Backend only, without Docker
+### 2. Clone & configure
+
+```bash
+git clone https://github.com/goyal-harshit/quant-analyzer.git
+cd quant-analyzer
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` — at minimum set your database password:
+
+```env
+DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@localhost:5432/quantai_db
+JWT_SECRET_KEY=change-this-to-any-random-string
+```
+
+### 3. Create the database
+
+```bash
+# Connect to PostgreSQL and create the database
+psql -U postgres -c "CREATE DATABASE quantai_db;"
+```
+
+### 4. Start the backend
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Free PostgreSQL options: install locally, or use Supabase's free tier
-export DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/quantai_db"
-
-# Make sure Ollama is running (see Option 3, steps 1-3)
-export OLLAMA_HOST="http://localhost:11434"
-export OLLAMA_MODEL="llama3.2"
-
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8000
 ```
 
-## Free Model Recommendations (via Ollama)
+Backend is live at http://localhost:8000 — visit http://localhost:8000/docs for the API explorer.
 
-| Model | Size | RAM Needed | Best For |
-|---|---|---|---|
-| `llama3.2:3b` | ~2GB | 8GB | Default — fast, good quality, runs on most laptops |
-| `phi3:3.8b` | ~2.3GB | 8GB | Microsoft's compact open model, fast |
-| `mistral:7b` | ~4GB | 16GB | Stronger general reasoning |
-| `qwen2.5:7b` | ~4.5GB | 16GB | Best reasoning quality in this size class |
+### 5. Start the frontend
 
-Pull any of these with `ollama pull <name>` and set `OLLAMA_MODEL` accordingly — all are open-weight, free for commercial use, no API key.
-
-## Project Structure
-
-```
-quant-analyzer/
-├── QuantAI_App.jsx          # Standalone interactive demo (calls Ollama, offline fallback)
-├── docker-compose.yml       # Full stack incl. Ollama, auto model-pull
-├── backend/
-│   ├── main.py
-│   ├── requirements.txt     # No paid SDKs — only open-source libraries
-│   ├── Dockerfile
-│   ├── .env.example         # No required keys
-│   ├── models/
-│   │   ├── database.py
-│   │   └── schemas.py
-│   ├── services/
-│   │   ├── data_service.py  # jugaad-data → nsepython → yfinance fallback chain
-│   │   ├── factor_engine.py # Quant factor computation
-│   │   └── ai_service.py    # Ollama integration (free, self-hosted LLM)
-│   └── routers/
-│       ├── stocks.py
-│       ├── screener.py
-│       ├── portfolio.py
-│       ├── backtest.py
-│       ├── macro.py
-│       └── ai.py
-└── frontend/
-    ├── package.json
-    ├── tsconfig.json
-    ├── tailwind.config.js
-    └── lib/api.ts
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-## Free India Market Data Sources Used
+Frontend is live at http://localhost:3000.
 
-| Source | What It Provides | Library/Access | Cost |
-|---|---|---|---|
-| NSE official archives | Historical OHLCV, official bhavcopy | `jugaad-data` (open-source) | Free |
-| NSE live endpoints | Real-time quotes | `nsepython` (open-source) | Free |
-| Yahoo Finance | Fallback price history + fundamentals (PE, PB, ROE etc.) | `yfinance` (open-source) | Free |
-| RBI DBIE | Repo rate history | dbie.rbi.org.in (official, public) | Free |
-| MOSPI | CPI inflation releases | mospi.gov.in (official, public) | Free |
-| data.gov.in | Mirrors many government economic series | Free, optional API key | Free |
-| FRED | India CPI and other macro series | Free registration | Free |
+---
 
-The data service tries these in fallback order automatically — if one is unavailable (NSE's official endpoints can be rate-limited or geo-restricted at times), it moves to the next free source rather than failing.
+## AI model setup
 
-## Free Deployment Options (if you want this running 24/7 without your own hardware)
+The app supports **5 AI providers**. You can switch between them live from the sidebar or the AI chat page — no restart needed.
 
-You don't need to pay anything to host this either:
+### Option A — Ollama (100% free, runs on your machine)
 
-- **Oracle Cloud Free Tier** — genuinely "always free" ARM VMs (4 OCPU / 24GB RAM), enough to run the whole stack including Ollama with a small model.
-- **Render free tier** — for the FastAPI backend (sleeps when idle, fine for a portfolio project).
-- **Railway free tier** — similar, good for demos.
-- **Vercel free tier** — for the Next.js frontend (generous free tier, built for this exact use case).
-- **Supabase free tier** — managed PostgreSQL if you don't want to self-host the database.
+Best for privacy and zero cost. Requires a GPU or 8–16 GB RAM.
 
-A genuinely zero-cost setup: Oracle Cloud Free Tier VM running Docker Compose with everything (Postgres, Redis, Ollama, FastAPI) + Vercel for the frontend.
+```bash
+# 1. Install Ollama
+# Windows / Mac: https://ollama.com/download
+# Linux:
+curl -fsSL https://ollama.com/install.sh | sh
 
-## Important Notes
+# 2. Start Ollama
+ollama serve
 
-- **Not investment advice.** Every AI output includes a disclaimer. This is a research/educational tool.
-- **Regulatory caution (India):** Per SEBI's Investment Adviser regulations, never present outputs as specific buy/sell recommendations if you monetize this. Consult a securities lawyer before any commercial launch.
-- **NSE data reliability:** Official NSE endpoints (via `jugaad-data`/`nsepython`) can occasionally rate-limit or change without notice since they're not a formally documented public API — that's exactly why the fallback chain to `yfinance` exists.
-- **Hardware reality check:** Ollama's quality scales with model size and your hardware. A 3B model on a laptop CPU will be noticeably less sharp than a hosted frontier model — that's the honest tradeoff for zero cost. For a stronger free option with more compute, consider Oracle's free ARM VM (4 OCPU/24GB) running a 7B model.
-- **Backtest limitations:** Simplified for demonstration — doesn't fully account for point-in-time fundamental data availability (lookahead bias) or survivorship bias.
+# 3. Pull a model (pick one based on your RAM)
+ollama pull llama3.2      # 8 GB RAM  — fast, great for most tasks
+ollama pull mistral       # 16 GB RAM — stronger reasoning
+ollama pull qwen2.5       # 16 GB RAM — excellent for structured analysis
+ollama pull llama3.1      # 16 GB RAM — Meta's latest 8B model
+ollama pull phi3          # 8 GB RAM  — Microsoft's compact model
+ollama pull gemma2        # 16 GB RAM — Google's open model
+```
 
-## What Changed From the Paid Version
+In the app: sidebar → model selector → **Ollama** → pick the model you pulled.
 
-| Component | Before | Now |
-|---|---|---|
-| AI / LLM | Anthropic Claude API (pay-per-use) | Ollama, self-hosted, free forever |
-| Price/fundamentals | Implied paid vendors (Polygon, Tiingo) | jugaad-data + nsepython + yfinance, all free |
-| Macro data keys | Assumed paid-tier access | RBI/MOSPI/data.gov.in (free, official) + free FRED tier |
-| Hosting | Implied AWS/cloud spend | Self-hosted via Docker, or free-tier cloud (Oracle/Render/Vercel) |
+### Option B — Groq (free API, fastest inference)
 
-Every dependency in `requirements.txt` and `package.json` is open-source. There is no point in this stack where you are required to enter a credit card.
+[groq.com](https://console.groq.com) → create account → API Keys → New Key (free, no card required)
+
+In the app: sidebar → model selector → **Groq** → paste your key → choose:
+- `Llama 3.3 (70B)` — best quality on Groq free tier
+- `Mixtral 8x7B` — very fast, good quality
+- `Llama 3.1 (8B Fast)` — fastest responses
+
+### Option C — Google Gemini (free tier available)
+
+[aistudio.google.com](https://aistudio.google.com) → Get API Key (free tier: 60 req/min)
+
+In the app: sidebar → **Gemini** → paste key → choose:
+- `Gemini 2.0 Flash` — fastest, best free tier model
+- `Gemini 1.5 Flash` — very fast, free
+- `Gemini 1.5 Pro` — highest quality (paid)
+
+### Option D — OpenAI
+
+[platform.openai.com](https://platform.openai.com) → API keys → Create key
+
+In the app: sidebar → **OpenAI** → paste key → choose:
+- `GPT-4o Mini` — cheapest, great quality
+- `GPT-4o` — best quality
+- `GPT-3.5 Turbo` — fastest/cheapest
+
+### Option E — Anthropic Claude
+
+[console.anthropic.com](https://console.anthropic.com) → API Keys → Create key
+
+In the app: sidebar → **Anthropic** → paste key → choose:
+- `Claude 3 Haiku` — fastest, cheapest
+- `Claude 3.5 Sonnet` — best quality
+
+> **API keys are stored in your browser only (localStorage). They are forwarded to your backend on each request and never stored server-side.**
+
+---
+
+## Environment variables
+
+```env
+# backend/.env
+
+# ── Database ──────────────────────────────────────────────────────
+DATABASE_URL=postgresql+asyncpg://quantai:quantai_pass@localhost:5432/quantai_db
+
+# ── Redis (optional — app works without it, just no caching) ──────
+REDIS_URL=redis://localhost:6379/0
+
+# ── Ollama (optional — only needed for local LLM) ─────────────────
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+
+# ── Auth ──────────────────────────────────────────────────────────
+JWT_SECRET_KEY=change-this-to-a-random-secret-in-production
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# ── Optional: extend macro data ───────────────────────────────────
+# Both are free — registration only
+FRED_API_KEY=
+DATA_GOV_IN_KEY=
+
+# ── CORS (add your domain if hosting) ─────────────────────────────
+CORS_ORIGINS=http://localhost:3000
+```
+
+---
+
+## Deploying to production
+
+### Frontend → GitHub Pages (automatic)
+
+Every push to `master` auto-deploys via GitHub Actions.
+
+Setup (one time):
+1. GitHub repo → **Settings** → **Pages** → Source: **GitHub Actions**
+2. Done — live at `https://goyal-harshit.github.io/quant-analyzer`
+
+### Backend → Render (free tier)
+
+1. [render.com](https://render.com) → Sign up with GitHub
+2. **New** → **Blueprint** → select this repo
+3. Render reads `render.yaml` and auto-creates the web service + PostgreSQL
+4. Click **Apply** — backend live in ~5 min at `https://quant-analyzer-backend.onrender.com`
+
+> **Note:** Render free tier sleeps after 15 min of inactivity. First request after sleep takes ~30s to wake. Upgrade to the $7/month plan for always-on.
+
+---
+
+## Features
+
+| Feature | Description |
+|---|---|
+| **Dashboard** | Live NIFTY/SENSEX indices, top gainers/losers, sector heatmap, factor signals |
+| **Screener** | Filter 500+ stocks by PE, PB, ROE, momentum, quality, value, growth scores |
+| **Stock Detail** | Price chart, fundamentals, 52-week range, AI analysis with your chosen model |
+| **Portfolio** | Track positions, P&L, sector allocation, performance vs benchmark |
+| **Watchlists** | Multiple lists, live price updates every 15s |
+| **Backtester** | Factor-based strategy backtesting with Sharpe, drawdown, win-rate metrics |
+| **Macro** | RBI repo rate, CPI, IIP, FII/DII flows, GDP growth |
+| **IPO Tracker** | Upcoming, open, and listed IPOs with GMP and subscription data |
+| **Mutual Funds** | Search, compare, SIP calculator, risk metrics |
+| **AI Chat** | Multi-provider AI tuned for Indian equities — works with any LLM you configure |
+
+---
+
+## Data sources (all free)
+
+| Data | Source |
+|---|---|
+| Stock quotes & history | Yahoo Finance v8 API (direct, no library) |
+| NSE live data | NseIndiaApi (cookie-managed, no key) |
+| Mutual fund NAV | mfapi.in |
+| Macro data | World Bank, FRED (optional free key), data.gov.in |
+| Fundamentals | Screener.in (scraped) + Yahoo Finance |
+
+---
+
+## Troubleshooting
+
+**Dashboard shows demo data**
+→ Backend not connected. Either run locally or deploy to Render and check `NEXT_PUBLIC_API_URL` in the GitHub Actions workflow.
+
+**Ollama shows "Unavailable" locally**
+→ Run `ollama serve` in a terminal, then refresh. Pull a model first: `ollama pull llama3.2`
+
+**"API key not set" in AI chat**
+→ Go to sidebar → model selector → enter your API key for the chosen provider.
+
+**Backend fails to start: "database not found"**
+→ `psql -U postgres -c "CREATE DATABASE quantai_db;"` then restart the backend.
+
+**Port 3000 already in use**
+→ `npm run dev -- --port 3001` for the frontend.

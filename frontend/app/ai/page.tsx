@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, MessageSquare, Cpu, RefreshCw } from 'lucide-react'
 import { T, pct } from '@/lib/stockData'
 import { aiApi } from '@/lib/api'
+import ModelSelector from '@/components/ai/ModelSelector'
+import { useModelStore, PROVIDERS } from '@/lib/model-store'
 
 const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
 
@@ -50,15 +52,20 @@ function buildOfflineChatReply(q) {
 }
 
 export default function AIChat() {
+  const { provider, modelId, getApiKey, getActiveModel } = useModelStore()
+  const activeModel = getActiveModel()
+  const providerInfo = PROVIDERS[provider]
+
   const [msgs, setMsgs] = useState<{ role: string; content: string; source?: string }[]>([
     {
       role: 'assistant',
-      content: '\u{1F1EE}\u{1F1F3} Namaste! I\'m QuantAI — running on a 100% free, open-source, self-hosted LLM (Ollama). No API keys, no payment, ever.\n\nI can help you:\n• Analyze Nifty 500 stocks and compare fundamentals\n• Discuss RBI policy impacts on sectors\n• Explain quantitative factors and factor investing\n• Research any NSE/BSE listed company\n• Interpret macro data for investment context\n\nWhat would you like to explore today?',
+      content: 'Namaste! I\'m QuantAI — your Indian equity research assistant.\n\nI can help you:\n• Analyze Nifty 500 stocks and compare fundamentals\n• Discuss RBI policy impacts on sectors\n• Explain quantitative factors and factor investing\n• Research any NSE/BSE listed company\n• Interpret macro data for investment context\n\nSelect your AI model from the sidebar or the panel below, then ask away.',
     },
   ])
   const [inp, setInp] = useState('')
   const [load, setLoad] = useState(false)
-  const endRef = useRef(null)
+  const [showModelPanel, setShowModelPanel] = useState(false)
+  const endRef = useRef<HTMLDivElement>(null)
   useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [msgs])
 
   async function send() {
@@ -70,8 +77,13 @@ export default function AIChat() {
     setLoad(true)
     try {
       const apiMsgs = next.filter((m, i) => !(m.role === 'assistant' && i === 0)).map(m => ({ role: m.role, content: m.content }))
-      const d = await aiApi.chat({ messages: apiMsgs })
-      setMsgs(p => [...p, { role: 'assistant', content: d.response || d.content, source: 'ollama' }])
+      const d = await aiApi.chat({
+        messages: apiMsgs,
+        provider,
+        model: modelId,
+        api_key: getApiKey() || undefined,
+      })
+      setMsgs(p => [...p, { role: 'assistant', content: d.response || d.content, source: d.source || provider }])
     } catch {
       setMsgs(p => [...p, { role: 'assistant', content: buildOfflineChatReply(q), source: 'offline' }])
     }
@@ -80,12 +92,32 @@ export default function AIChat() {
 
   return (
     <div style={{ padding: '26px 30px', maxWidth: 860, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 0px)', fontFamily: T.sans }}>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>QuantAI Research Assistant</div>
-        <div style={{ fontSize: 13, color: T.sub, marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Cpu size={12} color={T.green} /> Powered by Ollama (free, open-source, self-hosted) · Indian equity specialist
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowModelPanel(p => !p)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: `${providerInfo.color}18`, border: `1px solid ${providerInfo.color}50`,
+              borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: providerInfo.color,
+              fontSize: 11, fontWeight: 700, fontFamily: T.mono,
+            }}
+          >
+            {provider === 'ollama' ? <Cpu size={11} /> : null}
+            {activeModel?.label ?? modelId} · {providerInfo.label}
+            <span style={{ fontSize: 9, opacity: 0.7 }}>▼</span>
+          </button>
+          <span style={{ fontSize: 11, color: T.muted }}>Indian equity specialist</span>
         </div>
       </div>
+
+      {showModelPanel && (
+        <div style={{ background: T.card, border: `1px solid ${T.b}`, borderRadius: 12, marginBottom: 12, overflow: 'hidden' }}>
+          <ModelSelector />
+        </div>
+      )}
+
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
         {QUICK.map(p => (
@@ -114,7 +146,7 @@ export default function AIChat() {
               {m.role === 'assistant' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <span style={{ fontSize: 10, color: T.blue, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>QuantAI</span>
-                  {m.source && <Tag color={m.source === 'ollama' ? T.green : T.amber}>{m.source === 'ollama' ? 'Ollama' : 'Offline'}</Tag>}
+                  {m.source && <Tag color={m.source === 'offline' ? T.amber : T.green}>{m.source === 'offline' ? 'Offline' : m.source}</Tag>}
                 </div>
               )}
               {m.content}

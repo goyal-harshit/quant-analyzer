@@ -23,7 +23,13 @@ async def chat(request: ChatRequest):
     a specific stock the user is currently viewing.
     """
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
-    result = await ai_service.chat(messages, context_ticker=request.context_ticker)
+    result = await ai_service.chat(
+        messages,
+        context_ticker=request.context_ticker,
+        provider=request.provider,
+        model=request.model,
+        api_key=request.api_key,
+    )
     return ChatResponse(**result)
 
 
