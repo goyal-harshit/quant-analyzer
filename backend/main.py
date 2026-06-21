@@ -99,9 +99,7 @@ origins = [o.strip() for o in cors_origins_str.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    # Personal/local app: accept the frontend on any localhost/127.0.0.1 port
-    # (Docker uses :3000, but a local `next dev` or preview may use any port).
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://goyal-harshit\.github\.io",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,10 +1,9 @@
 services:
   - type: web
     name: quant-analyzer-backend
-    runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     plan: free
     envVars:
       - key: DATABASE_URL
