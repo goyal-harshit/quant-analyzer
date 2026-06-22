@@ -335,9 +335,9 @@ export default function StockDetail() {
                 { name: 'Low Volatility', val: fundamentals?.factor_scores?.low_volatility },
               ].map((f) => {
                 const hasScore = f.val !== null && f.val !== undefined
-                const scoreDisplay = hasScore ? `${Math.round(f.val)}/100` : 'N/A'
-                const progressWidth = hasScore ? `${f.val}%` : '0%'
-                const barColor = hasScore ? scoreColor(f.val) : '#475569'
+                const scoreDisplay = hasScore ? `${Math.round(f.val ?? 0)}/100` : 'N/A'
+                const progressWidth = hasScore ? `${f.val ?? 0}%` : '0%'
+                const barColor = hasScore ? scoreColor(f.val ?? 0) : '#475569'
 
                 return (
                   <div key={f.name} className="space-y-1.5 group">

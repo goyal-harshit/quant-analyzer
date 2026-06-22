@@ -7,6 +7,7 @@ import { TrendingUp, TrendingDown, RefreshCw, ArrowUpRight } from 'lucide-react'
 import PageShell from '@/components/layout/PageShell'
 import Card from '@/components/ui/Card'
 import { indicesApi, type IndexQuote } from '@/lib/api'
+import { symbolToSlug } from '@/lib/indices'
 
 const GROUP_ORDER = ['Broad', 'Sectoral', 'Thematic', 'Volatility']
 const pctStr = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
@@ -25,7 +26,10 @@ export default function IndicesPage() {
   const indices = data?.indices ?? []
   const grouped = GROUP_ORDER.map((g) => ({ group: g, items: indices.filter((i) => i.group === g) })).filter((g) => g.items.length)
 
-  const open = (symbol: string) => router.push(`/indices/${encodeURIComponent(symbol)}`)
+  const open = (symbol: string) => {
+    const slug = symbolToSlug(symbol)
+    if (slug) router.push(`/indices/${slug}`)
+  }
 
   return (
     <PageShell

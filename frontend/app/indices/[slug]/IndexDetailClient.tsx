@@ -8,13 +8,14 @@ import PageShell from '@/components/layout/PageShell'
 import Card from '@/components/ui/Card'
 import StockChart from '@/components/stocks/StockChart'
 import { indicesApi, stocksApi } from '@/lib/api'
+import { slugToSymbol } from '@/lib/indices'
 
 const pctStr = (n: number | null | undefined) => `${(n ?? 0) >= 0 ? '+' : ''}${(n ?? 0).toFixed(2)}%`
 
-export default function IndexDetailPage() {
+export default function IndexDetailClient() {
   const params = useParams()
   const router = useRouter()
-  const symbol = decodeURIComponent((params?.symbol as string) || '')
+  const symbol = slugToSymbol((params?.slug as string) || '') || ''
   const [refreshSeed, setRefreshSeed] = useState(0)
 
   const { data: detail, isLoading } = useQuery({
@@ -45,7 +46,7 @@ export default function IndexDetailPage() {
 
   return (
     <PageShell
-      title={detail?.name || symbol}
+      title={detail?.name || symbol || 'Index'}
       subtitle={`${detail?.group || 'Index'} · live NSE/BSE`}
       actions={
         <div className="flex items-center gap-2">

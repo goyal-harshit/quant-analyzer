@@ -9,6 +9,7 @@ import { useAuth } from '@/components/auth/AuthProvider'
 import PageShell from '@/components/layout/PageShell'
 import Card from '@/components/ui/Card'
 import { scoreColor } from '@/lib/stockData'
+import { nameToSlug } from '@/lib/indices'
 
 const DEMO_INDICES = [
   { name: 'NIFTY 50', last: 24857.3, change_pct: 0.62 },
@@ -61,14 +62,6 @@ const QUICK_ACTIONS = [
   { label: 'Sector Heatmap', href: '/sectors', icon: Grid3x3, hint: 'Rotation & breadth' },
   { label: 'Screener', href: '/screener', icon: Filter, hint: 'Filter the universe' },
 ]
-
-// Dashboard summary index names → Yahoo symbols (for the clickable detail links).
-const INDEX_SYMBOL: Record<string, string> = {
-  'NIFTY 50': '^NSEI',
-  'SENSEX': '^BSESN',
-  'BANK NIFTY': '^NSEBANK',
-  'INDIA VIX': '^INDIAVIX',
-}
 
 function greeting(): string {
   // IST hour for an India-first product.
@@ -240,11 +233,11 @@ export default function Dashboard() {
         {rawIndices.map((idx: any) => {
           const isPos = idx.change_pct >= 0
           const isVix = idx.name === 'INDIA VIX'
-          const sym = INDEX_SYMBOL[idx.name]
+          const slug = nameToSlug(idx.name)
           return (
             <button
               key={idx.name}
-              onClick={() => sym && router.push(`/indices/${encodeURIComponent(sym)}`)}
+              onClick={() => slug && router.push(`/indices/${slug}`)}
               className="group text-left rounded-xl border border-border bg-card hover:border-brand/40 hover:bg-elevated/30 shadow-card p-3 transition-all"
             >
               <div className="flex items-center justify-between">
