@@ -95,6 +95,47 @@ export default function Screener() {
       </div>
 
       <div style={card({ padding: '14px 18px', marginBottom: 18 })}>
+        {/* Quick preset chips */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
+          <div style={{ fontSize: 10, color: T.muted, marginRight: 4 }}>QUICK FILTERS:</div>
+          {[
+            { label: 'High Momentum', apply: { minMom: 70, minRoe: 0, maxPe: 100, minQual: 0, minScore: 0 } },
+            { label: 'Quality > 60', apply: { minQual: 60, minMom: 0, minRoe: 0, maxPe: 100, minScore: 0 } },
+            { label: 'Value (Low PE)', apply: { maxPe: 20, minMom: 0, minQual: 0, minRoe: 0, minScore: 0 } },
+            { label: 'High ROE', apply: { minRoe: 20, minMom: 0, minQual: 0, maxPe: 100, minScore: 0 } },
+            { label: 'Top Composite', apply: { minScore: 70, minMom: 0, minQual: 0, minRoe: 0, maxPe: 100 } },
+          ].map(p => {
+            const isActive = Object.entries(p.apply).every(([k, v]) => flt[k as keyof typeof flt] === v) && flt.sector === 'All'
+            return (
+              <button
+                key={p.label}
+                onClick={() => setFlt(f => ({ ...f, ...p.apply, sector: 'All' }))}
+                style={{
+                  padding: '4px 12px', borderRadius: 100, fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: T.sans,
+                  background: isActive ? `${T.blue}22` : T.el,
+                  border: `1px solid ${isActive ? `${T.blue}66` : T.b}`,
+                  color: isActive ? T.blue : T.sub,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {p.label}
+              </button>
+            )
+          })}
+          <button
+            onClick={() => setFlt({ sector: 'All', minRoe: 0, maxPe: 100, minMom: 0, minQual: 0, minScore: 0 })}
+            style={{
+              padding: '4px 12px', borderRadius: 100, fontSize: 11, fontWeight: 600,
+              cursor: 'pointer', fontFamily: T.sans,
+              background: 'transparent', border: `1px dashed ${T.b}`, color: T.muted,
+              marginLeft: 'auto',
+            }}
+          >
+            Reset
+          </button>
+        </div>
+
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div>
             <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>SECTOR</div>
