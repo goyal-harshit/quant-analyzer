@@ -283,10 +283,15 @@ class FactorEngine:
     def rsi(self, prices: pd.Series, window: int = 14) -> float:
         """Relative Strength Index."""
         delta = prices.diff()
-        gain = delta.clip(lower=0).rolling(window).mean()
-        loss = (-delta.clip(upper=0)).rolling(window).mean()
+        # Wilder's smoothing (standard RSI): EMA with alpha = 1/window.
+        gain = delta.clip(lower=0).ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
+        loss = (-delta.clip(upper=0)).ewm(alpha=1 / window, min_periods=window, adjust=False).mean()
         rs = gain / loss.replace(0, np.nan)
-        return float(100 - 100 / (1 + rs.iloc[-1]))
+        val = 100 - 100 / (1 + rs.iloc[-1])
+        # No losses in window → RS is inf → RSI = 100. NaN (flat/insufficient) → 50.
+        if pd.isna(val):
+            return 100.0 if (loss.iloc[-1] == 0 and gain.iloc[-1] > 0) else 50.0
+        return float(val)
 
     def moving_average(self, prices: pd.Series, window: int) -> pd.Series:
         return prices.rolling(window).mean()
@@ -341,17 +346,24 @@ class PortfolioAnalytics:
         return portfolio_values.pct_change().dropna()
 
     @staticmethod
-    def sharpe_ratio(returns: pd.Series, risk_free: float = 0.065) -> float:
-        """Annualised Sharpe. India 10Y Gsec ≈ 6.5%."""
-        excess = returns - risk_free / 252
-        return float((excess.mean() / returns.std()) * np.sqrt(252)) if returns.std() > 0 else 0.0
+    def sharpe_ratio(returns: pd.Series, risk_free: float = 0.065, periods: int = 252) -> float:
+        """Annualised Sharpe. India 10Y Gsec ≈ 6.5%.
+        `periods` = return observations per year (252 daily, 12 monthly, 4 quarterly)."""
+        if returns.std() == 0 or len(returns) < 2:
+            return 0.0
+        excess = returns - risk_free / periods
+        return float((excess.mean() / returns.std()) * np.sqrt(periods))
 
     @staticmethod
-    def sortino_ratio(returns: pd.Series, risk_free: float = 0.065) -> float:
-        """Sortino ratio — only penalises downside volatility."""
-        excess = returns - risk_free / 252
-        downside_std = returns[returns < 0].std() * np.sqrt(252)
-        return float(excess.mean() * 252 / downside_std) if downside_std > 0 else 0.0
+    def sortino_ratio(returns: pd.Series, risk_free: float = 0.065, periods: int = 252) -> float:
+        """Sortino ratio — only penalises downside volatility.
+        `periods` = return observations per year."""
+        excess = returns - risk_free / periods
+        downside = returns[returns < 0]
+        if len(downside) < 2:
+            return 0.0
+        downside_std = downside.std() * np.sqrt(periods)
+        return float(excess.mean() * periods / downside_std) if downside_std > 0 else 0.0
 
     @staticmethod
     def max_drawdown(values: pd.Series) -> float:
@@ -360,9 +372,11 @@ class PortfolioAnalytics:
         return float(drawdown.min())
 
     @staticmethod
-    def calmar_ratio(values: pd.Series) -> float:
-        returns = values.pct_change().dropna()
-        cagr = (values.iloc[-1] / values.iloc[0]) ** (252 / len(values)) - 1
+    def calmar_ratio(values: pd.Series, periods: int = 252) -> float:
+        """Calmar = CAGR / |max drawdown|. `periods` = observations per year."""
+        if len(values) < 2 or values.iloc[0] <= 0:
+            return 0.0
+        cagr = (values.iloc[-1] / values.iloc[0]) ** (periods / len(values)) - 1
         mdd = abs(PortfolioAnalytics.max_drawdown(values))
         return float(cagr / mdd) if mdd > 0 else 0.0
 
@@ -397,3 +411,4 @@ class PortfolioAnalytics:
         """Conditional VaR (Expected Shortfall)."""
         var = PortfolioAnalytics.var_historical(returns, confidence)
         return float(returns[returns <= var].mean())
+# end of factor_engine

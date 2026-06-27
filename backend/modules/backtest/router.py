@@ -107,24 +107,31 @@ async def run_backtest(request: BacktestRequest):
     port_returns = values.pct_change().dropna()
     bench_returns = bench_values.pct_change().dropna()
 
-    years = len(equity_curve) / (4 if rebal_freq == "QE" else 12 if rebal_freq == "ME" else 1)
+    periods_per_year = {"ME": 12, "QE": 4, "2QE": 2, "YE": 1}.get(rebal_freq, 4)
+    years = len(equity_curve) / periods_per_year
     total_return = (values.iloc[-1] / 100 - 1) * 100
     ann_return = ((values.iloc[-1] / 100) ** (1 / max(years, 0.25)) - 1) * 100
     bench_total_return = (bench_values.iloc[-1] / 100 - 1) * 100
+    bench_ann_return = ((bench_values.iloc[-1] / 100) ** (1 / max(years, 0.25)) - 1) * 100
+
+    # CAPM (Jensen's) alpha, annualised: port_ann − [rf + β·(bench_ann − rf)].
+    beta_val = PortfolioAnalytics.beta(port_returns, bench_returns) if len(port_returns) > 3 else 1.0
+    rf_pct = 6.5
+    capm_alpha = ann_return - (rf_pct + beta_val * (bench_ann_return - rf_pct))
 
     metrics = BacktestMetrics(
         total_return=round(total_return, 2),
         annualised_return=round(ann_return, 2),
         benchmark_return=round(bench_total_return, 2),
-        alpha=round(total_return - bench_total_return, 2),
-        beta=round(PortfolioAnalytics.beta(port_returns, bench_returns), 2) if len(port_returns) > 3 else 1.0,
-        sharpe_ratio=round(PortfolioAnalytics.sharpe_ratio(port_returns), 2) if len(port_returns) > 1 else 0,
-        sortino_ratio=round(PortfolioAnalytics.sortino_ratio(port_returns), 2) if len(port_returns) > 1 else 0,
+        alpha=round(capm_alpha, 2),
+        beta=round(beta_val, 2),
+        sharpe_ratio=round(PortfolioAnalytics.sharpe_ratio(port_returns, periods=periods_per_year), 2) if len(port_returns) > 1 else 0,
+        sortino_ratio=round(PortfolioAnalytics.sortino_ratio(port_returns, periods=periods_per_year), 2) if len(port_returns) > 1 else 0,
         max_drawdown=round(PortfolioAnalytics.max_drawdown(values) * 100, 2),
-        calmar_ratio=round(PortfolioAnalytics.calmar_ratio(values), 2) if len(values) > 2 else 0,
+        calmar_ratio=round(PortfolioAnalytics.calmar_ratio(values, periods=periods_per_year), 2) if len(values) > 2 else 0,
         win_rate=round(float((port_returns > 0).mean() * 100), 1) if len(port_returns) > 0 else 0,
         avg_monthly_return=round(float(port_returns.mean() * 100), 2) if len(port_returns) > 0 else 0,
-        volatility_ann=round(float(port_returns.std() * np.sqrt(4 if rebal_freq=='QE' else 12) * 100), 2) if len(port_returns) > 1 else 0,
+        volatility_ann=round(float(port_returns.std() * np.sqrt(periods_per_year) * 100), 2) if len(port_returns) > 1 else 0,
     )
 
     # Per-rebalance period returns (period-over-period % change of the equity curve).
@@ -175,3 +182,4 @@ async def list_strategy_templates():
             },
         ]
     }
+# end of backtest router

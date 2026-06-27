@@ -313,22 +313,24 @@ async def get_performance(db: AsyncSession, portfolio: SimPortfolio) -> dict:
             holdings_val = sum(q * close_as_of(tk, d, avg.get(tk, 0.0)) for tk, q in qty.items() if q > 0)
             equity.append({"date": d.isoformat(), "value": round(cash + holdings_val, 2)})
 
-        # Thin to keep the chart light.
+        # Keep the full daily curve for risk stats; thin only the chart output.
+        equity_full = equity
         if len(equity) > MAX_EQUITY_POINTS:
             step = len(equity) // MAX_EQUITY_POINTS
             equity = equity[::step] + [equity[-1]]
     else:
         today = datetime.now(timezone.utc).date()
         equity = [{"date": today.isoformat(), "value": round(portfolio.starting_capital, 2)}]
+        equity_full = equity
 
     # ── Risk stats from the equity curve ──
     max_dd = 0.0
     sharpe = 0.0
-    if len(equity) >= 2:
-        peak = equity[0]["value"]
+    if len(equity_full) >= 2:
+        peak = equity_full[0]["value"]
         rets = []
-        prev = equity[0]["value"]
-        for pt in equity:
+        prev = equity_full[0]["value"]
+        for pt in equity_full:
             v = pt["value"]
             peak = max(peak, v)
             if peak > 0:
@@ -360,3 +362,4 @@ async def get_performance(db: AsyncSession, portfolio: SimPortfolio) -> dict:
         "sharpe_ratio": round(sharpe, 2),
         "equity_curve": equity,
     }
+# end of simulator stats

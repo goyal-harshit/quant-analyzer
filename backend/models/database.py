@@ -5,8 +5,12 @@ Async SQLAlchemy with connection pooling
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, Boolean, Text, Index, Date, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, Boolean, Text, Index, Date, UniqueConstraint, JSON
+from sqlalchemy.dialects.postgresql import JSONB as _PG_JSONB
+
+# Use JSONB on PostgreSQL (indexable, native) but fall back to generic JSON on
+# other dialects (e.g. SQLite for local/dev/test) so the models are portable.
+JSONB = _PG_JSONB().with_variant(JSON(), "sqlite")
 from datetime import datetime, timezone
 from typing import Optional
 import os
@@ -24,7 +28,12 @@ DATABASE_URL = os.getenv(
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(DATABASE_URL, echo=False, pool_size=10, max_overflow=20)
+# pool_size/max_overflow only apply to pooled dialects (Postgres). SQLite's
+# default pool rejects them, so add them conditionally for portability.
+_engine_kwargs = {"echo": False}
+if DATABASE_URL.startswith("postgresql"):
+    _engine_kwargs.update(pool_size=10, max_overflow=20, pool_pre_ping=True)
+engine = create_async_engine(DATABASE_URL, **_engine_kwargs)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
