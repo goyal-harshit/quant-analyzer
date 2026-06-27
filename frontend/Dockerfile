@@ -19,9 +19,11 @@ FROM nginx:alpine AS runner
 # Copy static export from builder
 COPY --from=builder /app/out /usr/share/nginx/html
 
-# Create minimal nginx config for SPA
+# nginx config for the static export. try_files resolves clean URLs to the
+# matching .html file (e.g. /login -> /login.html) so direct hits and refreshes
+# work, falling back to index.html only when nothing matches.
 RUN rm /etc/nginx/conf.d/default.conf && \
-    echo 'server { listen 3000; location / { root /usr/share/nginx/html; try_files $uri /index.html; } }' > /etc/nginx/conf.d/default.conf
+    echo 'server { listen 3000; root /usr/share/nginx/html; location / { try_files $uri $uri.html $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 

@@ -37,6 +37,9 @@ jobs:
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_URL: https://quant-analyzer-backend.onrender.com/api/v1
+          # GitHub Pages serves under /quant-analyzer, so the static export needs
+          # this basePath. Docker/local builds leave it unset → served at root.
+          NEXT_PUBLIC_BASE_PATH: /quant-analyzer
         run: npm run build
 
       - name: Upload artifact
