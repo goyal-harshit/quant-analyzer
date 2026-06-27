@@ -28,3 +28,12 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Auto-generated / environment-specific
+.ports.json
+docker-compose.override.yml
+launch.json
+*.docx
+backend/pytest.ini
+frontend/out/
+.claude/
