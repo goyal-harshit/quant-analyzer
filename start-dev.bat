@@ -88,11 +88,25 @@ echo  Ollama LLM : localhost:11434
 echo ============================================================
 echo.
 
-echo [INFO] Opening browser in 3 seconds...
-timeout /t 3 /nobreak
+echo.
+echo [INFO] Waiting for services to fully initialize...
+timeout /t 5 /nobreak
 
-REM Open frontend in default browser
-start http://localhost:3000
+echo [INFO] Opening http://localhost:3000 in your browser...
+echo.
 
-echo [OK] Browser opened! Press any key to close this window...
+REM Try to open browser with PowerShell (more reliable)
+pwsh -NoProfile -ExecutionPolicy Bypass -Command "Start-Process 'http://localhost:3000'"
+
+if errorlevel 1 (
+    REM Fallback to cmd start command
+    start http://localhost:3000
+)
+
+echo.
+echo [OK] Browser should open in a few seconds
+echo.
+echo If browser doesn't open, manually visit: http://localhost:3000
+echo.
+echo Press any key to close this window...
 pause
