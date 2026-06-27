@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2026-06-27T11:44:50.4854012Z",
+  "services": {
+    "frontend": {
+      "target": 3000,
+      "current": 3000,
+      "available": true
+    },
+    "backend": {
+      "target": 8000,
+      "current": 8000,
+      "available": true
+    },
+    "postgres": {
+      "target": 5432,
+      "current": 5432,
+      "available": true
+    },
+    "redis": {
+      "target": 6379,
+      "current": 6379,
+      "available": true
+    },
+    "ollama": {
+      "target": 11434,
+      "current": 11434,
+      "available": true
+    }
+  },
+  "notes": "Port configuration file. If a port is unavailable, the current port is incremented. Update via automated port checker before docker-compose up."
+}
