@@ -88,4 +88,11 @@ echo ║  Ollama LLM : localhost:11434                               ║
 echo ╚════════════════════════════════════════════════════════════╝
 echo.
 
+echo 🌐 Opening browser in 3 seconds...
+timeout /t 3 /nobreak
+
+REM Open frontend in default browser
+start http://localhost:3000
+
+echo ✅ Browser opened! Press any key to close this window...
 pause
