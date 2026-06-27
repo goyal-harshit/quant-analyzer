@@ -5,15 +5,15 @@ color 0E
 title QuantAI - Stopping Services
 
 echo.
-echo ╔════════════════════════════════════════════════════════════╗
-echo ║              Stopping QuantAI Services                    ║
-echo ╚════════════════════════════════════════════════════════════╝
+echo ============================================================
+echo              Stopping QuantAI Services
+echo ============================================================
 echo.
 
 docker-compose down
 
 echo.
-echo ✅ All services stopped
+echo [OK] All services stopped
 echo.
 
 pause

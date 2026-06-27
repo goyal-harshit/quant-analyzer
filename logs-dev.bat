@@ -5,9 +5,9 @@ color 09
 title QuantAI - Service Logs
 
 echo.
-echo ╔════════════════════════════════════════════════════════════╗
-echo ║                 QuantAI Service Logs                       ║
-echo ╚════════════════════════════════════════════════════════════╝
+echo ============================================================
+echo                 QuantAI Service Logs
+echo ============================================================
 echo.
 
 echo Available services:

@@ -11,7 +11,7 @@ Creates docker-compose.override.yml with actual port mappings.
 $portsFile = ".ports.json"
 $overrideFile = "docker-compose.override.yml"
 
-Write-Host "🔍 Checking port availability..." -ForegroundColor Cyan
+Write-Host "[INFO] Checking port availability..." -ForegroundColor Cyan
 
 # Read current port config
 $config = Get-Content $portsFile | ConvertFrom-Json
@@ -46,7 +46,7 @@ foreach ($service in $config.services.PSObject.Properties) {
             $config.services.$name.current = $port
             $config.services.$name.available = $true
             $found = $true
-            Write-Host "✅ $name : port $port (available)" -ForegroundColor Green
+            Write-Host "[OK] $name : port $port (available)" -ForegroundColor Green
             break
         }
         $port++
@@ -54,7 +54,7 @@ foreach ($service in $config.services.PSObject.Properties) {
 
     if (-not $found) {
         $config.services.$name.available = $false
-        Write-Host "❌ $name : NO PORT AVAILABLE (checked ports $target-$($target+99))" -ForegroundColor Red
+        Write-Host "[ERROR] $name : NO PORT AVAILABLE (checked ports $target-$($target+99))" -ForegroundColor Red
     }
 
     # Add to docker-compose override
@@ -66,7 +66,7 @@ foreach ($service in $config.services.PSObject.Properties) {
 # Update .ports.json
 $config.lastUpdated = (Get-Date -AsUTC -Format o)
 $config | ConvertTo-Json -Depth 10 | Set-Content $portsFile
-Write-Host "✅ Updated $portsFile" -ForegroundColor Green
+Write-Host "[OK] Updated $portsFile" -ForegroundColor Green
 
 # Create docker-compose.override.yml
 $override = @{
@@ -75,15 +75,15 @@ $override = @{
 }
 
 $override | ConvertTo-Json -Depth 10 | Set-Content $overrideFile
-Write-Host "✅ Created $overrideFile" -ForegroundColor Green
+Write-Host "[OK] Created $overrideFile" -ForegroundColor Green
 
 # Summary
-Write-Host "`n📋 Port Summary:" -ForegroundColor Cyan
+Write-Host "`n[INFO] Port Summary:" -ForegroundColor Cyan
 foreach ($service in $config.services.PSObject.Properties) {
     $name = $service.Name
     $port = $service.Value.current
-    $status = if ($service.Value.available) { "✅" } else { "❌" }
+    $status = if ($service.Value.available) { "[OK]" } else { "[ERROR]" }
     Write-Host "  $status $name : localhost:$port" -ForegroundColor White
 }
 
-Write-Host "`n✨ Ready to run: docker-compose up -d" -ForegroundColor Green
+Write-Host "`n[OK] Ready to run: docker-compose up -d" -ForegroundColor Green
