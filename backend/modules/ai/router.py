@@ -1,20 +1,53 @@
-"""AI Router — LLM-powered research endpoints"""
+"""AI Router — LLM-powered research endpoints (+ Phase D RAG & conversations)"""
 
 import asyncio
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from datetime import datetime, timezone
+
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.schemas import (
     ChatRequest, ChatResponse, AIReportRequest, AIReportResponse,
     EarningsSummaryRequest,
 )
+from models.database import get_db, User
+from models.vector_store import Conversation, ConversationMessage
 from services.ai_service import ai_service, _STOCKS, buildOfflineReport
 from services.data_service import data_service
 from services.fast_data import compute_quant_factors
 from services.validation import validate_ticker
 from services.rate_limit import limiter
+from services.auth_service import get_current_user, require_admin
+from services import rag_service, rag_ingest, rag_store
 
 router = APIRouter()
+
+
+# ── Phase D request models ───────────────────────────────────────────────────
+class SemanticSearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    k: int = Field(default=5, ge=1, le=25)
+    kind: str | None = None
+
+
+class AskRequest(BaseModel):
+    query: str = Field(min_length=1)
+    k: int | None = Field(default=None, ge=1, le=25)
+
+
+class ReindexRequest(BaseModel):
+    tickers: list[str] | None = None
+
+
+class ConversationCreate(BaseModel):
+    title: str | None = None
+
+
+class MessageCreate(BaseModel):
+    content: str = Field(min_length=1)
+    use_rag: bool = True
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -227,3 +260,160 @@ async def portfolio_risk_narrative(portfolio_data: dict):
     """Generate plain-language explanation of portfolio risk metrics."""
     narrative = await ai_service.analyse_portfolio_risk(portfolio_data)
     return {"narrative": narrative}
+
+
+# ── RAG / semantic search (Phase D) ──────────────────────────────────────────
+
+@router.post("/semantic-search")
+@limiter.limit("30/minute")
+async def semantic_search(request: Request, payload: SemanticSearchRequest, db: AsyncSession = Depends(get_db)):
+    """Embed the query and return the most similar indexed documents (no LLM)."""
+    results = await rag_service.retrieve(db, payload.query, k=payload.k, kind=payload.kind)
+    return {
+        "query": payload.query,
+        "count": len(results),
+        # Trim the full text to a snippet for the list response.
+        "results": [
+            {**r, "snippet": (r.get("text") or "")[:280], "text": None}
+            for r in results
+        ],
+    }
+
+
+@router.post("/ask")
+@limiter.limit("20/minute")
+async def ask(request: Request, payload: AskRequest, db: AsyncSession = Depends(get_db)):
+    """Answer a question grounded in indexed platform data, with citations."""
+    return await rag_service.answer(db, payload.query, k=payload.k)
+
+
+@router.get("/rag/status")
+async def rag_status(db: AsyncSession = Depends(get_db)):
+    """How many documents are indexed (overall and for stocks)."""
+    return {
+        "documents": await rag_store.count_embeddings(db),
+        "stock_documents": await rag_store.count_embeddings(db, kind="stock"),
+    }
+
+
+@router.post("/rag/reindex")
+async def rag_reindex(
+    payload: ReindexRequest,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """(Admin) Embed + upsert canonical stock docs into the vector store."""
+    return await rag_ingest.ingest_stocks(db, tickers=payload.tickers)
+
+
+# ── Conversation history (Phase D #15) ───────────────────────────────────────
+
+def _conv_out(c: Conversation) -> dict:
+    return {"id": c.id, "title": c.title, "created_at": c.created_at, "updated_at": c.updated_at}
+
+
+async def _owned_conversation(conv_id: int, db: AsyncSession, user: User) -> Conversation:
+    conv = (
+        await db.execute(
+            select(Conversation).where(Conversation.id == conv_id, Conversation.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conv
+
+
+@router.post("/conversations")
+async def create_conversation(
+    payload: ConversationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    conv = Conversation(user_id=current_user.id, title=payload.title or "New conversation")
+    db.add(conv)
+    await db.commit()
+    await db.refresh(conv)
+    return _conv_out(conv)
+
+
+@router.get("/conversations")
+async def list_conversations(
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    rows = (
+        await db.execute(
+            select(Conversation)
+            .where(Conversation.user_id == current_user.id)
+            .order_by(Conversation.updated_at.desc())
+        )
+    ).scalars().all()
+    return [_conv_out(c) for c in rows]
+
+
+@router.get("/conversations/{conv_id}")
+async def get_conversation(
+    conv_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    conv = await _owned_conversation(conv_id, db, current_user)
+    msgs = (
+        await db.execute(
+            select(ConversationMessage)
+            .where(ConversationMessage.conversation_id == conv_id)
+            .order_by(ConversationMessage.created_at.asc(), ConversationMessage.id.asc())
+        )
+    ).scalars().all()
+    return {
+        **_conv_out(conv),
+        "messages": [
+            {"id": m.id, "role": m.role, "content": m.content,
+             "sources": m.sources, "created_at": m.created_at}
+            for m in msgs
+        ],
+    }
+
+
+@router.post("/conversations/{conv_id}/messages")
+async def add_message(
+    conv_id: int,
+    payload: MessageCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Append a user message, generate an (optionally RAG-grounded) reply, persist both."""
+    conv = await _owned_conversation(conv_id, db, current_user)
+
+    db.add(ConversationMessage(conversation_id=conv_id, role="user", content=payload.content))
+
+    if payload.use_rag:
+        result = await rag_service.answer(db, payload.content)
+        reply, sources = result["answer"], result.get("sources") or None
+    else:
+        chat = await ai_service.chat([{"role": "user", "content": payload.content}])
+        reply, sources = chat.get("response", ""), None
+
+    assistant = ConversationMessage(
+        conversation_id=conv_id, role="assistant", content=reply, sources=sources
+    )
+    db.add(assistant)
+    # First user message seeds the conversation title.
+    if conv.title in (None, "", "New conversation"):
+        conv.title = payload.content[:60]
+    await db.commit()
+    await db.refresh(assistant)
+    return {
+        "id": assistant.id,
+        "role": "assistant",
+        "content": reply,
+        "sources": sources,
+        "created_at": assistant.created_at,
+    }
+
+
+@router.delete("/conversations/{conv_id}")
+async def delete_conversation(
+    conv_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    conv = await _owned_conversation(conv_id, db, current_user)
+    await db.delete(conv)
+    await db.commit()
+    return {"deleted": True, "id": conv_id}

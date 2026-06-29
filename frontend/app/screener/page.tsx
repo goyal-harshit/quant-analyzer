@@ -212,10 +212,10 @@ export default function Screener() {
                   onClick={() => router.push(`/stocks/${stk.ticker}`)}
                   style={{
                     borderBottom: `1px solid ${T.b}`, cursor: 'pointer',
-                    background: i % 2 === 0 ? 'transparent' : `${T.el}66`,
+                    background: i % 2 === 0 ? 'transparent' : 'color-mix(in srgb, var(--elevated) 40%, transparent)',
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = T.el}
-                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : `${T.el}66`}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'color-mix(in srgb, var(--elevated) 40%, transparent)'}
                 >
                   <td style={{ padding: '9px 13px' }}>
                     <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 12, color: T.text }}>{stk.ticker}</div>

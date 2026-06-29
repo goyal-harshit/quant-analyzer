@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { TrendingUp, Activity, Shield, Database, Plus, Trash2, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { TrendingUp, Activity, Shield, Database, Plus, Trash2, RefreshCw, Upload, Download } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { T, fI, pct } from '@/lib/stockData'
 import { usePortfolios, usePortfolio, useAddPosition, useCreatePortfolio, useRemovePosition, usePortfolioPerformance } from '@/lib/hooks'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
+import { portfolioApi } from '@/lib/api'
 
 const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
 const sc = (v: number) => v >= 70 ? T.green : v >= 45 ? T.amber : T.red
@@ -63,6 +64,9 @@ export default function Portfolio() {
   const [addTicker, setAddTicker] = useState('')
   const [addQty, setAddQty] = useState('')
   const [addCost, setAddCost] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (portfolios && portfolios.length > 0 && !selId) {
@@ -105,6 +109,40 @@ export default function Portfolio() {
       toast.success('Position added')
     } catch {
       toast.error('Failed to add position')
+    }
+  }
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file
+    if (!file || !selId) return
+    setImporting(true)
+    try {
+      const res = await portfolioApi.importPositions(selId, file)
+      await qc.invalidateQueries({ queryKey: ['portfolio'] })
+      await qc.invalidateQueries({ queryKey: ['portfolios'] })
+      const parts = [`${res.imported} imported`]
+      if (res.merged) parts.push(`${res.merged} merged`)
+      if (res.skipped) parts.push(`${res.skipped} skipped`)
+      toast.success(parts.join(' · '))
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail
+      toast.error(typeof detail === 'object' ? (detail.message || 'Import failed') : (detail || 'Import failed'))
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const handleExport = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    if (!selId || !portfolio) return
+    setExporting(true)
+    try {
+      await portfolioApi.exportPortfolio(selId, portfolio.name, format)
+      toast.success(`Exported ${format.toUpperCase()}`)
+    } catch {
+      toast.error('Export failed')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -174,7 +212,7 @@ export default function Portfolio() {
           <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Portfolio Analytics</div>
           <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>{portfolio.name} · India Equity Portfolio</div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             onClick={() => setRefreshSeed(prev => prev + 1)}
             style={{
@@ -185,6 +223,42 @@ export default function Portfolio() {
           >
             <RefreshCw size={14} className={p2loading ? 'animate-spin' : ''} /> Refresh
           </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={handleImport}
+            style={{ display: 'none' }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={importing}
+            title="Import positions from a broker CSV or Excel file"
+            style={{
+              background: T.el, border: `1px solid ${T.b}`, color: T.sub, cursor: 'pointer',
+              padding: '9px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              fontFamily: T.sans, display: 'flex', alignItems: 'center', gap: 6,
+              opacity: importing ? 0.6 : 1,
+            }}
+          >
+            <Upload size={14} /> {importing ? 'Importing...' : 'Import'}
+          </button>
+          {(['csv', 'xlsx', 'pdf'] as const).map(fmt => (
+            <button
+              key={fmt}
+              onClick={() => handleExport(fmt)}
+              disabled={exporting || positions.length === 0}
+              title={`Export portfolio as ${fmt.toUpperCase()}`}
+              style={{
+                background: T.el, border: `1px solid ${T.b}`, color: T.sub, cursor: 'pointer',
+                padding: '9px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                fontFamily: T.sans, display: 'flex', alignItems: 'center', gap: 5,
+                opacity: (exporting || positions.length === 0) ? 0.5 : 1,
+              }}
+            >
+              <Download size={13} /> {fmt.toUpperCase()}
+            </button>
+          ))}
           <button
             onClick={() => setShowAdd(true)}
             style={{
@@ -285,7 +359,7 @@ export default function Portfolio() {
             </thead>
             <tbody>
               {positions.map((p: any, i: number) => (
-                <tr key={p.id} style={{ borderBottom: `1px solid ${T.b}`, background: i % 2 === 0 ? 'transparent' : `${T.el}55` }}>
+                <tr key={p.id} style={{ borderBottom: `1px solid ${T.b}`, background: i % 2 === 0 ? 'transparent' : 'color-mix(in srgb, var(--elevated) 33%, transparent)' }}>
                   <td style={{ padding: '11px 15px', fontFamily: T.mono, fontWeight: 700, fontSize: 12, color: T.text }}>{p.ticker}</td>
                   <td style={{ padding: '11px 15px' }}><Tag>{p.sector || 'N/A'}</Tag></td>
                   <td style={{ padding: '11px 15px', textAlign: 'right', fontFamily: T.mono, fontSize: 12, color: T.text }}>{p.quantity}</td>

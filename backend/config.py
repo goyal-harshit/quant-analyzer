@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     ollama_host: str = Field(default="http://localhost:11434", alias="OLLAMA_HOST")
     ollama_model: str = Field(default="llama3.2", alias="OLLAMA_MODEL")
 
+    # ── RAG / embeddings (Phase D) ────────────────────────────────
+    # Embeddings via Ollama (no extra Python deps). Disable to skip embedding
+    # calls entirely (semantic search / grounding degrade to empty, never error).
+    embedding_enabled: bool = Field(default=True, alias="EMBEDDING_ENABLED")
+    embedding_model: str = Field(default="nomic-embed-text", alias="EMBEDDING_MODEL")
+    rag_top_k: int = Field(default=5, alias="RAG_TOP_K")
+    # Min cosine similarity for a retrieved doc to be used as grounding context.
+    rag_min_score: float = Field(default=0.0, alias="RAG_MIN_SCORE")
+
     # ── Optional external data keys (free tiers; blank = disabled) ─
     fred_api_key: str = Field(default="", alias="FRED_API_KEY")
     data_gov_in_key: str = Field(default="", alias="DATA_GOV_IN_KEY")

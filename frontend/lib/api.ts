@@ -310,6 +310,26 @@ export const aiApi = {
 
   getEarningsSummary: (data: { ticker: string; period?: string }) =>
     client.post("/ai/earnings-summary", data, AI_TIMEOUT).then((r) => r.data),
+
+  // ── RAG (Phase D) ──
+  semanticSearch: (query: string, k = 5, kind?: string) =>
+    client.post("/ai/semantic-search", { query, k, kind }).then((r) => r.data),
+
+  ask: (query: string, k?: number) =>
+    client.post("/ai/ask", { query, k }, AI_TIMEOUT).then((r) => r.data),
+
+  ragStatus: () => client.get("/ai/rag/status").then((r) => r.data),
+
+  // Conversation history
+  listConversations: () => client.get("/ai/conversations").then((r) => r.data),
+  createConversation: (title?: string) =>
+    client.post("/ai/conversations", { title }).then((r) => r.data),
+  getConversation: (id: number) =>
+    client.get(`/ai/conversations/${id}`).then((r) => r.data),
+  sendConversationMessage: (id: number, content: string, useRag = true) =>
+    client.post(`/ai/conversations/${id}/messages`, { content, use_rag: useRag }, AI_TIMEOUT).then((r) => r.data),
+  deleteConversation: (id: number) =>
+    client.delete(`/ai/conversations/${id}`).then((r) => r.data),
 };
 
 // ── DASHBOARD ────────────────────────────────────────────────────

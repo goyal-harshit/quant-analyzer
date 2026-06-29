@@ -11,6 +11,7 @@ from alembic.config import Config
 
 # Import every module that defines tables so Base.metadata is complete.
 import models.market_store  # noqa: F401
+import models.vector_store  # noqa: F401
 from models.database import Base
 from modules.ipo import models as _ipo  # noqa: F401
 from modules.mutual_funds import models as _mf  # noqa: F401

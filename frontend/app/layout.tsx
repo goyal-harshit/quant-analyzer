@@ -3,6 +3,7 @@ import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import QueryProvider from '@/components/providers/QueryProvider'
 import { AuthProvider } from '@/components/auth/AuthProvider'
+import { ThemeProvider, themeNoFlashScript } from '@/components/providers/ThemeProvider'
 import LayoutShell from '@/components/layout/LayoutShell'
 
 export const metadata: Metadata = {
@@ -16,7 +17,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* No-flash theme: set the html class from localStorage before paint. */}
+        <script dangerouslySetInnerHTML={{ __html: themeNoFlashScript }} />
+      </head>
       <body className="antialiased bg-bg text-textPrimary">
         {/* Font links — Next.js App Router hoists <link> tags into <head>.
             Avoids a render-blocking CSS @import while staying hydration-safe
@@ -27,19 +32,26 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
         />
-        <QueryProvider>
-          <AuthProvider>
-            <LayoutShell>
-              {children}
-            </LayoutShell>
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                style: { background: '#0f182e', color: '#e2e8f0', border: '1px solid #1e2d4a', fontSize: '13px' },
-              }}
-            />
-          </AuthProvider>
-        </QueryProvider>
+        <ThemeProvider>
+          <QueryProvider>
+            <AuthProvider>
+              <LayoutShell>
+                {children}
+              </LayoutShell>
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  style: {
+                    background: 'var(--elevated)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border)',
+                    fontSize: '13px',
+                  },
+                }}
+              />
+            </AuthProvider>
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

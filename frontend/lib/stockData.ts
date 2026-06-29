@@ -41,20 +41,25 @@ export function scoreColor(v: number): string {
 }
 
 // ━━━ Design Tokens ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Surface / text tokens reference theme-aware CSS variables (defined in
+// app/globals.css; flipped by the ThemeProvider via `html.light`/`html.dark`),
+// so inline `style={{ background: T.card }}` reacts to the dark/light toggle.
+// Accent colors stay literal hex — they read well on both themes AND are used
+// with the alpha-append idiom (`${T.green}22`) that requires a hex string.
 export const T = {
-  bg: '#030712',
-  card: '#0a1020',
-  el: '#0f182e',
-  b: '#1e2d4a',
-  bhi: '#2a3f6a',
+  bg: 'var(--bg)',
+  card: 'var(--card)',
+  el: 'var(--elevated)',
+  b: 'var(--border)',
+  bhi: 'var(--border-hi)',
   blue: '#3b82f6',
   green: '#22c55e',
   red: '#f43f5e',
   amber: '#f59e0b',
   purple: '#a78bfa',
-  text: '#e2e8f0',
-  sub: '#94a3b8',
-  muted: '#475569',
+  text: 'var(--text-primary)',
+  sub: 'var(--text-sub)',
+  muted: 'var(--text-muted)',
   mono: '"JetBrains Mono",Consolas,monospace',
   sans: 'Inter,system-ui,sans-serif',
 };

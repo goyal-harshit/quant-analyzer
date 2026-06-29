@@ -38,7 +38,7 @@ QuantAI is a mature full-stack analyzer: FastAPI backend (20 domain modules), Ne
 | Landing page | ✅ | `app/page.tsx` exists (616 LOC) | — |
 | Dashboard | ✅ | `app/dashboard` live | — |
 | Authentication UI | ✅ | `login`/`register` pages | — |
-| Dark/Light mode | 🟡 | **Hardcoded `className="dark"` in `layout.tsx`** — no toggle. Add `next-themes` + token switch. Phase E. | `next-themes` (MIT) |
+| Dark/Light mode | ✅ | Zero-dep `ThemeProvider` + header toggle; `html.light` CSS-var overrides; `T` tokens theme-aware; localStorage-persisted, no-flash. *(bug #2 fixed)* | — (hand-rolled) |
 | Responsive design | 🟡 | Desktop-first; no mobile hamburger/responsive grids. **P1** | Tailwind breakpoints |
 | Charts & analytics | ✅ | `lightweight-charts` + `recharts` wired | — |
 | Data tables | 🟡 | Tables exist; no shared sortable/virtualized table. Add TanStack Table (`react-virtual` already installed). | `@tanstack/react-table` |
@@ -99,12 +99,12 @@ QuantAI is a mature full-stack analyzer: FastAPI backend (20 domain modules), Ne
 |---|---|---|
 | Local LLM (Ollama/LM Studio) | ✅ | `ai_service` multi-provider incl. Ollama |
 | Chatbot | ✅ | `/ai` page + insight agent |
-| **RAG** | ❌ | No vector store. Add `pgvector` (Postgres-native, OSS) + embed fundamentals/news/filings so AI answers from *your* data. **P1 — biggest differentiator** |
-| Semantic search | ❌ | Falls out of RAG: embed symbols/news → `pgvector` similarity. **P1** |
-| Document Q&A | ❌ | Annual-report/filing upload → chunk → embed → query. **P2** |
-| Embeddings | ❌ | `sentence-transformers` (local, free) or Ollama `nomic-embed-text`. **P1** |
-| Prompt templates | 🟡 | System prompts hard-coded in `ai_service`; externalise to versioned templates. |
-| Conversation history | 🟡 | Verify persistence; store per-user threads in DB. **P2** |
+| **RAG** | ✅ | `services/rag_service.py` — embed query → in-process vector store → grounded answer w/ citations (`POST /ai/ask`). Embeddings stored as JSON (pgvector-ready seam). |
+| Semantic search | ✅ | `POST /ai/semantic-search` — cosine over Ollama embeddings, ranked docs + scores. |
+| Document Q&A | 🟡 | Stock profile docs indexed; annual-report/filing chunking still a follow-up. **P2** |
+| Embeddings | ✅ | Ollama `nomic-embed-text` (768-dim) via `embedding_service.py`; zero extra Python deps. |
+| Prompt templates | ✅ | RAG prompts externalised to `services/prompts.py` (versioned). Other ai_service prompts can migrate over time. |
+| Conversation history | ✅ | Per-user `conversations`/`conversation_messages`; `/ai/conversations` CRUD persists RAG citations. |
 | AI code review | ➖ | Dev-tooling, not product. Skip. |
 | AI summarization | 🟡 | Insight agent summarises; extend to news/earnings. |
 | AI report generation | 🟡 | Insight reports exist; add scheduled stock/portfolio briefings. **P2** |
@@ -241,10 +241,10 @@ QuantAI is a mature full-stack analyzer: FastAPI backend (20 domain modules), Ne
 | # | Severity | Finding | Fix |
 |---|---|---|---|
 | 1 | ~~**High**~~ **FIXED** | ~~No Alembic migrations~~ | Baseline migration + RBAC migration; `scripts/migrate.py` safe adoption; CI verify step. `DB_AUTO_CREATE=false` in prod. |
-| 2 | **High** | **Dark mode hardcoded** (`<html className="dark">`) — checklist asks for dark/light; no toggle, tokens assume dark. | Add `next-themes`, make CSS vars theme-aware, persist choice. **Phase E** |
+| 2 | ~~**High**~~ **FIXED** | ~~Dark mode hardcoded~~ | Zero-dep `ThemeProvider` (no `next-themes`); `html.light` CSS-var overrides; `T` surface tokens → `var(--…)`; header Sun/Moon toggle; no-flash `<head>` script; localStorage-persisted. Verified in-browser. |
 | 3 | ~~Medium~~ **FIXED** | ~~CSRF gap~~ | Double-submit guard: csrf cookie + `X-CSRF-Token` header. Token also in login body for cross-site frontend. |
 | 4 | ~~Medium~~ **FIXED** | ~~No email transport~~ | `services/email_service.py` — console/memory/smtp. Password reset + email verification tested. |
-| 5 | Medium | **AI not grounded** — chatbot answers from model priors, not platform data; RAG/embeddings absent though `ai_service` is solid. | pgvector + local embeddings; retrieve fundamentals/news as context. |
+| 5 | ~~Medium~~ **FIXED** | ~~AI not grounded~~ | RAG: Ollama `nomic-embed-text` embeddings + in-process vector store; `/ai/ask` retrieves platform docs and answers with citations. (pgvector swap optional.) |
 | 6 | Medium | **No file import/export** — portfolio can't ingest broker CSV; nothing exportable (PDF/CSV/Excel). | pandas import + reportlab/openpyxl export. |
 | 7 | Low | **`dangerouslySetInnerHTML`** used (inline style tag, per git history) — audit it isn't reachable by user input. | Confirm static-only; prefer styled-jsx/CSS module. |
 | 8 | Low | **God-objects** `data_service.py` (~1k LOC) / `seed_data.py` (~964 LOC). | Split into providers/transforms/cache; seed → fixtures (audit §3.3). |
@@ -271,21 +271,21 @@ Ordered so each phase unblocks the next. Every tool below is OSS or free-tier.
 8. ✅ **RBAC** — `role` + `is_verified` on User (migration `5158e99478e5`); `require_role`/`require_admin` dependencies.
 > Output: RBAC live, email transport ready, reset/verify tested. 135 tests. OAuth/magic-links pending.
 
-### Phase C — Data I/O & reporting (P1, ~1–2 weeks)
-9. **CSV/Excel portfolio import** — pandas parse → positions. *(bug #6)*
-10. **Export engine** — CSV + Excel (`openpyxl`) + PDF (`reportlab`/`weasyprint`): portfolio, screener results, tax report.
-11. **MinIO (or local volume)** for uploaded files — OSS S3, no Cloudinary lock-in.
-> Output: data goes in and comes out; reports are shareable.
+### Phase C — Data I/O & reporting (P1) ✅ COMPLETE (2026-06-29)
+9. ✅ **CSV/Excel portfolio import** — `services/portfolio_io.parse_positions` (flexible header aliasing, currency-tolerant, dup-ticker weighted merge) → `POST /portfolio/{id}/import`. *(bug #6 fixed)*
+10. ✅ **Export engine** — CSV + Excel (`openpyxl`) + PDF (`reportlab`): `GET /portfolio/{id}/export?format=…`, `GET /portfolio/{id}/tax-report` (LTCG/STCG), `POST /screener/export`. Frontend buttons wired.
+11. ➖ **MinIO/object storage** — deferred; broker statements are parsed in memory and never persisted, so no blob store needed yet. Revisit if filing/document upload (Phase D) lands.
+> Output: data goes in and comes out; reports are shareable. 156 tests. (Also fixed: `pydantic-settings` missing from requirements.txt.)
 
-### Phase D — AI grounding / RAG (P1, ~2 weeks) — the differentiator
-12. **pgvector** extension + embeddings (`sentence-transformers` or Ollama `nomic-embed-text`).
-13. **Ingest + embed** fundamentals, news, (optional) filings.
-14. **RAG retrieval** in `ai_service`; **semantic search** endpoint; cite sources.
-15. **Conversation history** persisted per user; **prompt templates** externalised.
-> Output: AI answers from *your* data with citations; semantic search live.
+### Phase D — AI grounding / RAG (P1) ✅ COMPLETE (2026-06-29) — the differentiator
+12. ✅ **Embeddings** via Ollama `nomic-embed-text` (`embedding_service.py`, zero new deps). **pgvector deferred** — current `timescaledb:pg16` image has no `vector` ext (swap risks the volume); embeddings stored as portable JSON + in-process cosine (`rag_store.search`), pgvector-ready seam.
+13. ✅ **Ingest + embed** fundamentals/factors (`rag_ingest.build_stock_doc` + `ingest_stocks`). News/filings = optional follow-up.
+14. ✅ **RAG retrieval + grounded answer with citations** (`rag_service.retrieve/answer`); **`POST /ai/semantic-search`** + **`POST /ai/ask`** endpoints. **Verified live** (nomic-embed-text 768-dim + llama3.2 cited answer).
+15. ✅ **Conversation history** persisted per user (`conversations`/`conversation_messages` + `/ai/conversations` CRUD); **prompt templates externalised** to `services/prompts.py`.
+> Output: AI answers from *your* data with citations; semantic search live. 176 tests. (AI-page UI wiring + scheduled embed task = follow-ups.)
 
-### Phase E — Frontend completeness & UX (P1–P2, ~2 weeks)
-16. **Dark/light toggle** (`next-themes`) + theme tokens. *(bug #2)*
+### Phase E — Frontend completeness & UX (P1–P2, ~2 weeks) — IN PROGRESS
+16. ✅ **Dark/light toggle** — zero-dep `ThemeProvider` + `html.light` CSS-var overrides + theme-aware `T` tokens + header Sun/Moon toggle (no-flash, persisted). *(bug #2 fixed, verified in-browser)*
 17. **Responsive + mobile nav**; **PWA** (`next-pwa`) for offline/mobile.
 18. **Shared data table** (TanStack Table + virtual), **forms** (RHF+Zod), robust **loading/empty/error** states.
 19. **Markdown rendering + syntax highlight** for AI output.
@@ -330,17 +330,17 @@ Ordered so each phase unblocks the next. Every tool below is OSS or free-tier.
 | Backend core (REST, auth, jobs, rate-limit, versioning, CI) | ~95% | Logging, settings, migrations all ✅ |
 | Database (PG, Redis, SQLite, migrations) | ~90% | Alembic versioned; TimescaleDB hypertables wired |
 | Auth (password, cookies, CSRF, RBAC, reset/verify) | ~80% | OAuth/magic-links still missing |
-| AI (chat ✅, RAG/semantic/embeddings ❌) | ~50% | pgvector/RAG is Phase D |
-| File handling (import/export) | ~10% | Phase C — CSV/PDF/Excel all missing |
+| AI (chat ✅, RAG/semantic/embeddings ✅) | ~90% | Phase D ✅ — Ollama embeddings + in-process vector store + grounded ask w/ citations + conversation history; pgvector swap optional |
+| File handling (import/export) | ~85% | Phase C ✅ — CSV/Excel import + CSV/Excel/PDF export + tax report. ZIP/object-store deferred |
 | Visualization | ~70% | Charts live; correlation network / timeline polish pending |
 | Security (CSRF ✅, RBAC ✅, httpOnly ✅) | ~90% | XSS audit + HSTS still pending |
 | DevEx (docs, tests, docker, CI) | ~90% | 135 tests; ruff + pytest + migration verify in CI |
 | Monitoring/Analytics | ~55% | `/metrics` Prometheus ✅; Grafana/Plausible/Umami not wired |
-| Frontend polish (theme toggle, responsive, PWA) | ~60% | Phase E — dark mode hardcoded, no mobile nav |
+| Frontend polish (theme toggle, responsive, PWA) | ~70% | Phase E — dark/light toggle ✅ (bug #2 fixed); responsive/mobile nav + PWA pending |
 
-**Completed phases:** A (Foundation), B core (RBAC, email, reset/verify)
+**Completed phases:** A (Foundation), B core (RBAC, email, reset/verify), C (file import/export + reporting), D (RAG/AI grounding), E partial (dark/light toggle)
 
-**Highest-leverage next:** (1) Phase C — CSV/Excel portfolio import + PDF/Excel export, (2) Phase D — RAG/pgvector AI grounding, (3) Phase E — dark/light toggle + responsive/PWA, (4) OAuth social login (needs creds), (5) Playwright E2E tests.
+**Highest-leverage next:** (1) AI-page RAG UI (grounded ask + citation display), (2) rest of Phase E — responsive/mobile nav + PWA, (3) OAuth social login (needs creds), (4) Playwright E2E tests.
 
 ---
 *Generated 2026-06-28 · Updated 2026-06-29. Free/OSS-only. Pair with `QuantAI_Audit_Improvements_Roadmap.docx` for the strategic rationale and market-needs context.*

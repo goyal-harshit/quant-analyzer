@@ -254,8 +254,105 @@ reset/verify, #8 RBAC); OAuth social login (#5) deferred — needs live provider
   rejection, via the memory outbox). **Suite now 135 tests.** Frontend `tsc` clean.
 
 Still deferred: OAuth social login (authlib Google/GitHub — needs creds), magic links,
-file import/export + PDF reports (Phase C), RAG/pgvector AI grounding (Phase D),
-dark/light + responsive/PWA (Phase E), store adoption across remaining modules.*
+RAG/pgvector AI grounding (Phase D), dark/light + responsive/PWA (Phase E),
+store adoption across remaining modules.*
+
+## Phase C — data I/O & reporting (2026-06-29)
+
+From `PROJECT_MASTER_PLAN.md` Phase C (#9 import, #10 export engine). MinIO/object
+storage (#11) deferred — not needed for the broker-statement use-case (parse in
+memory, never persist the upload).
+- **Pure I/O service** — `services/portfolio_io.py` (no DB / network, fully unit-
+  testable): `parse_positions(bytes, filename)` parses broker **CSV/Excel** with
+  flexible header aliasing (ticker/symbol/scrip, qty/units/shares, price/avg_cost/
+  buy_price…), currency-symbol/comma-tolerant number parsing, per-row error
+  reporting, and **weighted-average merging of duplicate tickers**. Export builders:
+  `positions_to_csv`, `positions_to_xlsx` (openpyxl), `portfolio_to_pdf` (reportlab —
+  summary + holdings table), `rows_to_csv` (generic). `build_tax_report` classifies
+  current holdings into **long/short-term unrealized capital gains** (>365-day holding
+  → LTCG) — a planning aid, not a filed computation.
+- **Portfolio endpoints** — `POST /portfolio/{id}/import` (UploadFile; merges into
+  existing positions, 5 MB cap, 422 on no valid rows), `GET /portfolio/{id}/export?
+  format=csv|xlsx|pdf` (reuses the fully-valued `get_portfolio`; `Content-Disposition`
+  attachment), `GET /portfolio/{id}/tax-report`. All ownership-checked.
+- **Screener export** — `POST /screener/export` runs the screen (pagination widened)
+  and streams the filtered results as CSV.
+- **Frontend** — `portfolioApi.importPositions/exportPortfolio/getTaxReport` in
+  `lib/api.ts` (blob download helper; CSRF auto-attached by the request interceptor);
+  Import + CSV/XLSX/PDF export buttons wired into `app/portfolio/page.tsx` with toasts
+  and query invalidation.
+- **Deps** — added `openpyxl==3.1.5` + `reportlab==4.2.5`. Also **fixed a latent gap**:
+  `pydantic-settings` was imported by `config.py` but missing from `requirements.txt`
+  (CI/Docker would fail at import) — now pinned `==2.5.2`.
+- Tests: `test_portfolio_io.py` (14, pure-unit) + `test_portfolio_import_export.py`
+  (7, full HTTP+DB+CSRF+ownership, offline-safe). **Suite now 156 tests.** Frontend
+  `tsc` clean; `ruff check .` clean.
+
+> Local env note: the async-SQLAlchemy tests need `DATABASE_URL=sqlite+aiosqlite:///...`
+> (as CI sets) and a loadable `greenlet` native DLL — Windows Smart App Control may
+> transiently block it on first run.*
+
+## Phase E (partial) — dark/light theme toggle (2026-06-29)
+
+`PROJECT_MASTER_PLAN.md` Phase E #16 / **bug #2 (High) fixed**: dark mode was hard-coded
+(`<html className="dark">`, tokens dark-only). Now a real toggle, **zero new deps**
+(hand-rolled, not `next-themes` — avoids `npm ci`/lockfile churn).
+- **Theme tokens are now CSS-variable driven.** `globals.css` `:root` keeps the dark
+  palette as default; a new `html.light {…}` block overrides only the surface/text/
+  border vars (+ glass, chart-grid). Added `--text-strong` (replaces hard-coded `#fff`
+  in `.page-title`/`.metric-value`) and `--glass`/`--glass-elevated`.
+- **`lib/stockData.ts` `T` tokens** — surface/text tokens (`bg/card/el/b/bhi/text/sub/
+  muted`) now reference `var(--…)` so the pervasive inline `style={{ background: T.card }}`
+  reacts to the toggle. **Accent colors stay literal hex** (blue/green/red/amber/purple)
+  because they read on both themes AND feed the `${T.green}22` alpha-append idiom (a
+  `var()` can't be alpha-appended). The 6 surface-token alpha-appends (`${T.el}55` etc.,
+  in portfolio/screener/watchlists/profile) were rewritten to `color-mix(in srgb, var(--…) N%, transparent)`.
+- **`components/providers/ThemeProvider.tsx`** — context (`theme/toggle/setTheme`),
+  persists to `localStorage['theme']`, sets `html` class + `colorScheme`. `themeNoFlashScript`
+  runs in `<head>` (layout) before paint to set the class (no FOUC); `<html suppressHydrationWarning>`.
+  Toaster colors switched to vars.
+- **Toggle button** (Sun/Moon) added to `components/layout/Header.tsx`.
+- Charts (`StockChart`/`PriceChart`) don't consume `T` surface tokens (canvas can't read
+  `var()`), so no breakage; their hard-coded colors are a pre-existing item (not in scope).
+- **Verified in-browser** (`next dev` + preview): `html.dark`→bg `#010810`/text `#e2e8f0`,
+  `html.light`→bg `#f7f8fa`/text `#1e293b`; clicking the header toggle flips the class,
+  body bg, `colorScheme`, and persists to localStorage. `tsc` + `next build` both clean.
+
+Remaining Phase E: responsive/mobile nav, PWA, shared TanStack table, RHF+Zod forms,
+markdown+syntax-highlight for AI output.
+
+## Phase D — RAG / AI grounding (2026-06-29)
+
+`PROJECT_MASTER_PLAN.md` Phase D #12–15. **The differentiator: AI answers from platform
+data with citations.** Verified live against the Docker stack (Ollama `nomic-embed-text`
+768-dim + `llama3.2` grounded generation).
+- **No pgvector image swap.** Current Postgres is `timescale/timescaledb:pg16` (no `vector`
+  ext); swapping risks the data volume. Embeddings stored as **portable JSON** (`embeddings`
+  table) and cosine ranked **in-process** (`services.rag_store.search`) — the seam where a
+  pgvector ANN index can drop in later. Fine for a single-user corpus.
+- **Embeddings via Ollama** (`services/embedding_service.py`, `nomic-embed-text`) — **zero
+  new Python deps** (no torch/sentence-transformers). `cosine_similarity` is pure stdlib.
+  All calls degrade to None on failure (never raise). Config: `EMBEDDING_ENABLED`,
+  `EMBEDDING_MODEL`, `RAG_TOP_K`, `RAG_MIN_SCORE`.
+- **Ingest** (`services/rag_ingest.py`): `build_stock_doc` (pure: data → NL profile doc)
+  + `ingest_stocks` (fetch via data_service → embed → upsert; one bad ticker never aborts).
+- **RAG** (`services/rag_service.py`): `retrieve` (embed query → store search) + `answer`
+  (grounded prompt with numbered context → `ai_service._generate` → answer + citations;
+  ungrounded chat fallback when nothing indexed / embeddings off). Prompts externalized to
+  `services/prompts.py` (`RAG_SYSTEM_PROMPT`, `build_rag_user_prompt`).
+- **Conversation history** (`models/vector_store.py`: `conversations` + `conversation_messages`,
+  cascade delete) — per-user threads with persisted RAG citations.
+- **Endpoints** (`modules/ai/router.py`): `POST /ai/semantic-search`, `POST /ai/ask`,
+  `GET /ai/rag/status`, `POST /ai/rag/reindex` (admin), and conversation CRUD
+  (`POST/GET /ai/conversations`, `GET/POST/DELETE /ai/conversations/{id}[/messages]`).
+  Frontend `aiApi` methods added in `lib/api.ts` (UI page wiring still pending).
+- **Migration** `5ce6ccb6b6b5` (3 tables; JSONB→portable `sa.JSON().with_variant(JSONB,"postgresql")`;
+  env.py + drift test updated). Upgrades/downgrades clean on SQLite.
+- Tests: `test_rag.py` (8 pure), `test_rag_store.py` (4, SQLite), `test_rag_endpoints.py`
+  (8, offline via fake embedder + fake LLM). **Suite now 176 tests.** ruff + `tsc` clean.
+
+Remaining Phase D (optional): scheduled Celery embed task, news/filings ingestion, AI-page
+UI for grounded ask + citation display, pgvector swap if corpus grows.*
 
 ## Data Source Strategy
 
@@ -285,4 +382,4 @@ quant-analyzer/
 ```
 
 ---
-*Last updated: 2026-06-29 — Phases A + B (core) complete; 135 backend tests passing. Next: Phase C (file import/export) or Phase D (RAG/pgvector).*
+*Last updated: 2026-06-29 — Phases A + B (core) + C (file I/O) + D (RAG/grounding) complete; Phase E started (dark/light toggle). 176 backend tests passing. RAG verified live on Docker (nomic-embed-text + llama3.2). Next: AI-page RAG UI, Phase E responsive/PWA.*

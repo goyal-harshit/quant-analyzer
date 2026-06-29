@@ -69,7 +69,7 @@ export default function ProfilePage() {
           ['Plan', user.plan],
           ['Status', user.is_active ? 'Active' : 'Inactive'],
         ].map(([k, v]) => (
-          <div key={k as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${T.b}66`, fontSize: 13 }}>
+          <div key={k as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid color-mix(in srgb, var(--border) 40%, transparent)', fontSize: 13 }}>
             <span style={{ color: T.sub }}>{k}</span>
             <span style={{ color: T.text, fontFamily: T.mono, textTransform: 'capitalize' }}>{v as string}</span>
           </div>

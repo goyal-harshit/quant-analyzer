@@ -19,6 +19,7 @@ if config.config_file_name is not None:
 # Base.metadata — otherwise autogenerate silently omits them.
 from models.database import Base
 from models import market_store as _market_store  # noqa: F401,E402
+from models import vector_store as _vector_store  # noqa: F401,E402
 from modules.mutual_funds import models as _mf_models  # noqa: F401,E402
 from modules.ipo import models as _ipo_models  # noqa: F401,E402
 from modules.simulator import models as _sim_models  # noqa: F401,E402

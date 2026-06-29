@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { Search, Bell, User as UserIcon, Menu } from 'lucide-react'
+import { Search, Bell, User as UserIcon, Menu, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
+import { useTheme } from '../providers/ThemeProvider'
 import { usePathname } from 'next/navigation'
 
 interface HeaderProps {
@@ -14,6 +15,7 @@ interface HeaderProps {
 
 export default function Header({ onSearchClick, contentOffset = 224, isMobile = false, onMenuClick }: HeaderProps) {
   const { user } = useAuth()
+  const { theme, toggle } = useTheme()
   const pathname = usePathname()
 
   const isAuthPage = pathname === '/login' || pathname === '/register'
@@ -50,6 +52,16 @@ export default function Header({ onSearchClick, contentOffset = 224, isMobile = 
 
       {/* Right side items */}
       <div className="flex items-center gap-4">
+        {/* Theme toggle */}
+        <button
+          onClick={toggle}
+          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          className="p-2 rounded-lg text-textSub hover:text-textPrimary hover:bg-elevated border border-transparent hover:border-border transition-colors"
+        >
+          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+
         {/* Notifications */}
         <Link
           href="/notifications"
