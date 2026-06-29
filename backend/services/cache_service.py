@@ -22,6 +22,15 @@ TTL_NEWS = 600
 _redis_instance = None
 
 
+def _record_cache(hit: bool) -> None:
+    """Record a cache hit/miss for the /metrics cache-hit-rate gauge (best-effort)."""
+    try:
+        from services.observability import metrics
+        metrics.inc("cache_requests_total", {"result": "hit" if hit else "miss"})
+    except Exception:
+        pass
+
+
 class CacheService:
     def __init__(self, redis_url: str = None):
         import os
@@ -45,6 +54,11 @@ class CacheService:
             self._redis = None
 
     async def get(self, key: str) -> Optional[str]:
+        value = await self._get_raw(key)
+        _record_cache(value is not None)
+        return value
+
+    async def _get_raw(self, key: str) -> Optional[str]:
         if self._redis is None:
             await self._connect()
         if self._redis:

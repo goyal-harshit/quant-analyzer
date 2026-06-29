@@ -2,13 +2,14 @@
 Screener.in scraper — fetches fundamental data for Indian stocks.
 Free, no API key required. Scrapes public company pages.
 """
-import asyncio
 import logging
 import re
 from typing import Optional
 
 import httpx
 from bs4 import BeautifulSoup
+
+from services.reliability import SOURCE_DOWN_STATUS, CircuitOpenError, guard_call
 
 logger = logging.getLogger(__name__)
 
@@ -63,23 +64,6 @@ def _extract_table_data(soup: BeautifulSoup, section_id: str) -> dict:
     return result
 
 
-# Global throttle — screener.in blocks bursts, so serialise scrapes to a steady
-# rate (min-interval gate) across ALL callers (warm-up, screener, on-demand).
-_SCREENER_SEM = asyncio.Semaphore(2)
-_RATE_LOCK = asyncio.Lock()
-_LAST_TS = [0.0]
-_MIN_GAP = 1.5  # seconds between successive screener.in requests (avoids burst blocks)
-
-
-async def _rate_gate():
-    import time
-    async with _RATE_LOCK:
-        gap = time.monotonic() - _LAST_TS[0]
-        if gap < _MIN_GAP:
-            await asyncio.sleep(_MIN_GAP - gap)
-        _LAST_TS[0] = time.monotonic()
-
-
 class ScreenerService:
     """Scrapes Screener.in for Indian stock fundamental data."""
 
@@ -104,25 +88,42 @@ class ScreenerService:
                 return cached_data
 
         url = self.base_url.format(ticker=ticker)
+
+        # screener.in blocks bursts, so every scrape goes through the shared
+        # "screener" guard: a token bucket smooths requests to a steady rate and
+        # a circuit breaker short-circuits once screener.in starts blocking us,
+        # instead of stampeding it with retries (the old 429/403 "storm").
+        async def _fetch_html() -> Optional[str]:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers=HEADERS)
+                if resp.status_code == 200:
+                    return resp.text
+                if resp.status_code in SOURCE_DOWN_STATUS:
+                    raise httpx.HTTPStatusError(
+                        f"Screener.in HTTP {resp.status_code}", request=resp.request, response=resp
+                    )
+                logger.warning(f"Screener.in returned {resp.status_code} for {ticker}")
+                return None
+
         try:
-            async with _SCREENER_SEM:
-                await _rate_gate()
-                async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-                    resp = await client.get(url, headers=HEADERS)
-                    if resp.status_code != 200:
-                        logger.warning(f"Screener.in returned {resp.status_code} for {ticker}")
-                        return {}
-                    html = resp.text
-
-            soup = BeautifulSoup(html, "lxml")
-            data = self._parse_screener_page(soup, ticker)
-
-            # Cache result
-            self._cache[ticker] = (now, data)
-            return data
-
+            html = await guard_call("screener", _fetch_html)
+        except CircuitOpenError as e:
+            logger.warning("Screener.in circuit open, skipping %s: %s", ticker, e)
+            return {}
         except Exception as e:
             logger.error(f"Screener.in scrape failed for {ticker}: {e}")
+            return {}
+
+        if not html:
+            return {}
+
+        try:
+            soup = BeautifulSoup(html, "lxml")
+            data = self._parse_screener_page(soup, ticker)
+            self._cache[ticker] = (now, data)
+            return data
+        except Exception as e:
+            logger.error(f"Screener.in parse failed for {ticker}: {e}")
             return {}
 
     def _parse_screener_page(self, soup: BeautifulSoup, ticker: str) -> dict:

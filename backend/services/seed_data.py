@@ -3,7 +3,6 @@ seed_data.py — Deterministic seed data for 100 Indian stocks.
 Provides reliable offline fallback when live data sources fail.
 """
 import hashlib
-import math
 import random
 from datetime import datetime, timedelta
 

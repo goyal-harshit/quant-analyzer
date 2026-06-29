@@ -16,10 +16,14 @@ interface AuthContextType {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+// Non-sensitive marker that a session likely exists. The actual JWT lives only in
+// the httpOnly cookie set by the backend — never in JS-readable storage.
+const AUTH_FLAG = 'authed'
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -30,8 +34,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await authApi.me()
       setUser(data)
+      localStorage.setItem(AUTH_FLAG, '1')
     } catch {
       setUser(null)
+      localStorage.removeItem(AUTH_FLAG)
       localStorage.removeItem('token')
     } finally {
       setLoading(false)
@@ -39,8 +45,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
+    // A legacy 'token' or the 'authed' marker both signal a possible session;
+    // /me then confirms it via the httpOnly cookie.
+    if (localStorage.getItem(AUTH_FLAG) || localStorage.getItem('token')) {
       fetchUser()
     } else {
       setUser(null)
@@ -53,8 +60,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     params.append('username', email)
     params.append('password', password)
 
-    const res = await authApi.login(params)
-    localStorage.setItem('token', res.access_token)
+    // Login sets the httpOnly auth cookies server-side; we only record a marker.
+    await authApi.login(params)
+    localStorage.setItem(AUTH_FLAG, '1')
+    localStorage.removeItem('token') // drop any legacy JS-stored token
     await fetchUser()
     router.push('/dashboard')
   }
@@ -64,8 +73,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await login(email, password)
   }
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authApi.logout() // clears the httpOnly cookies server-side
+    } catch {
+      /* best-effort */
+    }
+    localStorage.removeItem(AUTH_FLAG)
     localStorage.removeItem('token')
+    localStorage.removeItem('csrf')
     setUser(null)
     router.push('/login')
   }

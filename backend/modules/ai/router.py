@@ -8,7 +8,7 @@ from models.schemas import (
     ChatRequest, ChatResponse, AIReportRequest, AIReportResponse,
     EarningsSummaryRequest,
 )
-from services.ai_service import ai_service, SYSTEM_PROMPT_ANALYST, _STOCKS, buildOfflineReport, buildOfflineChatReply
+from services.ai_service import ai_service, _STOCKS, buildOfflineReport
 from services.data_service import data_service
 from services.fast_data import compute_quant_factors
 from services.validation import validate_ticker

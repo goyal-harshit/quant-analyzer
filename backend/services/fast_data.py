@@ -5,14 +5,15 @@ Bypasses the yfinance library's rate limiting by calling Yahoo Finance
 API endpoints directly via httpx. Works reliably from Docker containers.
 """
 
-import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
 import numpy as np
 import pandas as pd
+
+from services.reliability import SOURCE_DOWN_STATUS, CircuitOpenError, guard_call
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +23,30 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 
 class FastDataService:
     """
-    Direct Yahoo Finance API calls — fast, reliable, no rate limiting.
+    Direct Yahoo Finance API calls, guarded by a per-source circuit breaker +
+    rate limiter so repeated 429/403s trip the breaker instead of stampeding.
     """
 
     def __init__(self):
         self.client = httpx.AsyncClient(timeout=12.0, headers=HEADERS)
 
     async def _get(self, url: str, params: dict = None) -> Optional[dict]:
-        try:
+        async def _fetch() -> Optional[dict]:
             resp = await self.client.get(url, params=params)
             if resp.status_code == 200:
                 return resp.json()
+            if resp.status_code in SOURCE_DOWN_STATUS:
+                # Raise so the breaker counts this against Yahoo's health.
+                raise httpx.HTTPStatusError(
+                    f"Yahoo HTTP {resp.status_code}", request=resp.request, response=resp
+                )
+            # Data-absent (404/400/etc.): healthy source, no data — don't trip.
+            return None
+
+        try:
+            return await guard_call("yahoo", _fetch)
+        except CircuitOpenError as e:
+            logger.warning("Yahoo circuit open, skipping fetch: %s", e)
         except Exception as e:
             logger.warning(f"Yahoo API error: {e}")
         return None
@@ -325,7 +339,12 @@ def compute_quant_factors(df: pd.DataFrame, fundamentals: dict) -> dict:
         gain = delta.clip(lower=0).rolling(14).mean()
         loss = (-delta.clip(upper=0)).rolling(14).mean()
         rs = gain / loss.replace(0, np.nan)
-        factors["rsi_14"] = round(float(100 - 100 / (1 + rs.iloc[-1])), 1)
+        rsi_val = 100 - 100 / (1 + rs.iloc[-1])
+        # Guard the degenerate windows: all gains -> loss is 0 -> rs is NaN -> RSI
+        # should be 100 (not NaN, which would leak to the API); flat/insufficient -> 50.
+        if pd.isna(rsi_val):
+            rsi_val = 100.0 if (loss.iloc[-1] == 0 and gain.iloc[-1] > 0) else 50.0
+        factors["rsi_14"] = round(float(rsi_val), 1)
 
     if len(close) >= 50:
         factors["sma_50"] = round(float(close.rolling(50).mean().iloc[-1]), 2)

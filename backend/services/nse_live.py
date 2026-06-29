@@ -15,6 +15,8 @@ import time
 
 import httpx
 
+from services.reliability import get_guard
+
 logger = logging.getLogger(__name__)
 
 _BASE = "https://www.nseindia.com"
@@ -83,27 +85,46 @@ async def _warm(force: bool = False) -> None:
 
 
 async def get_json(path: str, referer: str | None = None) -> dict | list | None:
-    """GET an NSE API path (e.g. '/api/fiidiiTradeReact'); returns parsed JSON or None."""
+    """GET an NSE API path (e.g. '/api/fiidiiTradeReact'); returns parsed JSON or None.
+
+    Guarded by the shared "nse" circuit breaker: when NSE is persistently blocking
+    us (repeated 403s even after re-warming cookies), the breaker opens and we
+    short-circuit for a cooldown instead of hammering it on every request.
+    """
     url = path if path.startswith("http") else f"{_BASE}{path}"
+    guard = await get_guard("nse")
+    breaker = guard.breaker
+    if not await breaker.allow():
+        logger.info("NSE circuit open, skipping %s", url)
+        return None
+
     await _warm()
     client = await _get_client()
     headers = dict(_HEADERS)
     if referer:
         headers["Referer"] = referer
-    for attempt in range(2):
-        try:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code == 200:
-                ct = resp.headers.get("content-type", "")
-                if "json" in ct or resp.text.strip()[:1] in "[{":
-                    return resp.json()
+    try:
+        for attempt in range(2):
+            try:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 200:
+                    ct = resp.headers.get("content-type", "")
+                    if "json" in ct or resp.text.strip()[:1] in "[{":
+                        await breaker.record_success()
+                        return resp.json()
+                    await breaker.record_success()  # responded fine, just not JSON
+                    return None
+                if resp.status_code in (401, 403):
+                    await _warm(force=True)
+                    continue
+                logger.info("NSE %s -> HTTP %s", url, resp.status_code)
+                await breaker.record_failure()
                 return None
-            if resp.status_code in (401, 403):
+            except Exception as e:  # noqa: BLE001
+                logger.info("NSE %s error: %s", url, e)
                 await _warm(force=True)
-                continue
-            logger.info("NSE %s -> HTTP %s", url, resp.status_code)
-            return None
-        except Exception as e:  # noqa: BLE001
-            logger.info("NSE %s error: %s", url, e)
-            await _warm(force=True)
+    except Exception:  # pragma: no cover - defensive
+        pass
+    # All attempts exhausted (or repeated 401/403) — count it against the breaker.
+    await breaker.record_failure()
     return None

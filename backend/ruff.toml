@@ -1,0 +1,26 @@
+# Ruff configuration — a high-signal "safety net" lint gate.
+#
+# We deliberately scope to the rules that catch real breakage (syntax errors,
+# undefined names, unused imports, redefinitions) rather than full style
+# enforcement, so the CI gate is meaningful and green from day one. The ruleset
+# can be widened over time as the codebase is cleaned up.
+
+target-version = "py311"
+line-length = 120
+extend-exclude = ["alembic", "__pycache__"]
+
+[lint]
+select = [
+    "E9",    # syntax / runtime errors
+    "F401",  # unused imports
+    "F811",  # redefinition of unused name
+    "F821",  # undefined name
+    "F822",  # undefined name in __all__
+    "F823",  # local used before assignment
+    "F63",   # invalid comparisons / assertions
+    "F7",    # syntax-level pyflakes (break/return outside scope, etc.)
+]
+
+[lint.per-file-ignores]
+# Test files may import fixtures/symbols for their side effects.
+"tests/*" = ["F401"]

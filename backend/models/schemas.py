@@ -358,7 +358,9 @@ class UserOut(BaseModel):
     id: int
     email: str
     plan: str
+    role: str = "user"
     is_active: bool
+    is_verified: bool = False
 
     class Config:
         from_attributes = True
@@ -366,3 +368,4 @@ class UserOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    csrf_token: str | None = None  # double-submit CSRF token (also set as a cookie)

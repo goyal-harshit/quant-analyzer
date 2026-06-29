@@ -3,7 +3,7 @@ Database setup — PostgreSQL + TimescaleDB
 Async SQLAlchemy with connection pooling
 """
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, Float, Integer, DateTime, ForeignKey, Boolean, Text, Index, Date, UniqueConstraint, JSON
 from sqlalchemy.dialects.postgresql import JSONB as _PG_JSONB
@@ -163,7 +163,9 @@ class User(Base):
     email:      Mapped[str]  = mapped_column(String(255), unique=True, nullable=False)
     hashed_pw:  Mapped[str]  = mapped_column(String(255))
     plan:       Mapped[str]  = mapped_column(String(20), default="free")
+    role:       Mapped[str]  = mapped_column(String(20), default="user", server_default="user")  # user | admin
     is_active:  Mapped[bool] = mapped_column(Boolean, default=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     portfolios:     Mapped[list["Portfolio"]] = relationship(back_populates="user")
@@ -294,6 +296,12 @@ class BacktestRun(Base):
 
 
 async def init_db():
+    """Ensure the schema exists. In dev/test (DB_AUTO_CREATE=true, the default) this
+    uses create_all for convenience. In production set DB_AUTO_CREATE=false so
+    Alembic migrations are the single source of truth (applied on deploy) and a
+    stray create_all can't mask a missing migration."""
+    if os.getenv("DB_AUTO_CREATE", "true").lower() in ("0", "false", "no"):
+        return
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

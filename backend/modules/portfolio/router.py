@@ -1,6 +1,7 @@
 """Portfolio Router — Position tracking and risk analytics"""
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import pandas as pd
@@ -15,6 +16,10 @@ from models.schemas import PortfolioCreate, PortfolioOut, PositionCreate, Positi
 from services.data_service import data_service, _gather_limited
 from services.factor_engine import PortfolioAnalytics
 from services.auth_service import get_current_user
+from services import portfolio_io
+
+# Upload guardrail — broker statements are tiny; reject anything implausibly large.
+_MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
 router = APIRouter()
 
@@ -424,4 +429,156 @@ async def get_portfolio_performance(
         "performance": performance_data,
         "benchmark": benchmark,
     }
+
+
+# ── Phase C: import / export / tax helper ───────────────────────────────────
+
+async def _owned_portfolio(portfolio_id: int, db: AsyncSession, user: User) -> PortfolioModel:
+    res = await db.execute(
+        select(PortfolioModel).where(
+            PortfolioModel.id == portfolio_id, PortfolioModel.user_id == user.id
+        )
+    )
+    portfolio = res.scalar_one_or_none()
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    return portfolio
+
+
+@router.post("/{portfolio_id}/import")
+async def import_positions(
+    portfolio_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Import positions from a broker CSV/Excel file.
+
+    Flexible header matching (ticker/symbol, qty/quantity, price/avg_cost…).
+    A ticker already in the portfolio is merged (quantity summed, cost re-averaged)
+    rather than duplicated. Invalid rows are reported, never fatal.
+    """
+    await _owned_portfolio(portfolio_id, db, current_user)
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 5 MB).")
+
+    parsed = portfolio_io.parse_positions(content, file.filename or "")
+    if not parsed.ok:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "No valid positions parsed.", "errors": parsed.errors},
+        )
+
+    existing_res = await db.execute(
+        select(PositionModel).where(PositionModel.portfolio_id == portfolio_id)
+    )
+    existing = {p.ticker: p for p in existing_res.scalars().all()}
+
+    added, merged = 0, 0
+    for pp in parsed.positions:
+        cur = existing.get(pp.ticker)
+        if cur:
+            total_qty = cur.quantity + pp.quantity
+            cur.avg_cost = round(
+                (cur.avg_cost * cur.quantity + pp.avg_cost * pp.quantity) / total_qty, 4
+            )
+            cur.quantity = total_qty
+            merged += 1
+        else:
+            position = PositionModel(
+                portfolio_id=portfolio_id,
+                ticker=pp.ticker,
+                quantity=pp.quantity,
+                avg_cost=pp.avg_cost,
+                notes=pp.notes,
+            )
+            db.add(position)
+            existing[pp.ticker] = position
+            added += 1
+
+    await db.commit()
+    return {
+        "imported": added + merged,
+        "added": added,
+        "merged": merged,
+        "skipped": parsed.skipped,
+        "errors": parsed.errors,
+    }
+
+
+_EXPORT_MEDIA = {
+    "csv": ("text/csv", "csv"),
+    "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+    "pdf": ("application/pdf", "pdf"),
+}
+
+
+@router.get("/{portfolio_id}/export")
+async def export_portfolio(
+    portfolio_id: int,
+    format: str = "csv",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export a valued portfolio as CSV, Excel, or PDF."""
+    fmt = format.lower()
+    if fmt not in _EXPORT_MEDIA:
+        raise HTTPException(status_code=400, detail="format must be csv, xlsx, or pdf")
+
+    portfolio = await _owned_portfolio(portfolio_id, db, current_user)
+    # Reuse the fully-valued portfolio (live prices, P&L, risk metrics).
+    valued = await get_portfolio(portfolio_id, refresh=False, db=db, current_user=current_user)
+    data = valued.model_dump() if hasattr(valued, "model_dump") else dict(valued)
+    positions = data.get("positions", [])
+
+    if fmt == "csv":
+        body = portfolio_io.positions_to_csv(positions)
+    elif fmt == "xlsx":
+        body = portfolio_io.positions_to_xlsx(positions, sheet_name=portfolio.name)
+    else:  # pdf
+        body = portfolio_io.portfolio_to_pdf(data)
+
+    media_type, ext = _EXPORT_MEDIA[fmt]
+    safe_name = "".join(c for c in portfolio.name if c.isalnum() or c in ("-", "_")) or "portfolio"
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.{ext}"'},
+    )
+
+
+@router.get("/{portfolio_id}/tax-report")
+async def tax_report(
+    portfolio_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Unrealized short-term vs long-term capital-gains breakdown (holding-period based)."""
+    await _owned_portfolio(portfolio_id, db, current_user)
+
+    pos_res = await db.execute(
+        select(PositionModel).where(PositionModel.portfolio_id == portfolio_id)
+    )
+    positions = pos_res.scalars().all()
+    if not positions:
+        return portfolio_io.build_tax_report([])
+
+    tickers = [p.ticker for p in positions]
+    quote_map = await data_service.get_batch_quotes(tickers)
+    rows = []
+    for p in positions:
+        q = quote_map.get(p.ticker) or {}
+        price = (q.get("price") if isinstance(q, dict) else None) or p.avg_cost
+        rows.append({
+            "ticker": p.ticker,
+            "quantity": p.quantity,
+            "avg_cost": p.avg_cost,
+            "current_price": price,
+            "date_added": p.date_added,
+        })
+    return portfolio_io.build_tax_report(rows)
 

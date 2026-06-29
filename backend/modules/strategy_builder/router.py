@@ -2,12 +2,12 @@
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import List
 import pandas as pd
 
 from services.data_service import data_service, _gather_limited
 from services.seed_data import DEFAULT_TICKERS
-from services.factor_engine import FactorEngine, PortfolioAnalytics
+from services.factor_engine import FactorEngine
 
 router = APIRouter()
 engine = FactorEngine()

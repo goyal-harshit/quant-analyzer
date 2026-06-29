@@ -206,10 +206,10 @@ def buildOfflineChatReply(query: str) -> str:
             f"⚠️ Offline rule-based reply."
         )
     return (
-        f"I can discuss specific Nifty stocks (try mentioning a ticker like 'HDFCBANK' or 'TCS'), "
-        f"RBI policy, or factor investing concepts. Try a quick prompt or ask about a specific stock.\n\n"
-        f"⚠️ Offline rule-based reply (Ollama not reachable). "
-        f"Run `ollama serve` on your host for full open-source LLM responses — free, no API key."
+        "I can discuss specific Nifty stocks (try mentioning a ticker like 'HDFCBANK' or 'TCS'), "
+        "RBI policy, or factor investing concepts. Try a quick prompt or ask about a specific stock.\n\n"
+        "⚠️ Offline rule-based reply (Ollama not reachable). "
+        "Run `ollama serve` on your host for full open-source LLM responses — free, no API key."
     )
 
 

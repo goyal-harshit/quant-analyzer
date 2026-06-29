@@ -18,7 +18,6 @@ import json
 import logging
 from datetime import date, datetime, timezone, timedelta
 
-import httpx
 
 from services.cache_service import cache
 

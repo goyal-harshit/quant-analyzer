@@ -3,13 +3,12 @@ QuantAI Backend — FastAPI Application
 India-First Quantitative Investment Platform
 """
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import asyncio
 import logging
-import os
 from datetime import datetime, timezone
 
 # ── Domain modules (PROJECT_PLAN §4: each domain under modules/<name>/) ──
@@ -37,9 +36,17 @@ from modules.sectors import router as sectors
 from modules.mutual_funds import models as _mf_models  # noqa: F401
 from modules.ipo import models as _ipo_models  # noqa: F401
 from modules.simulator import models as _sim_models  # noqa: F401
+# Ingest-then-serve store tables (market_quotes / market_bars / market_fundamentals).
+from models import market_store as _market_store_models  # noqa: F401
 from models.database import init_db, get_db
 
-logging.basicConfig(level=logging.INFO)
+from config import get_settings  # noqa: E402
+from services.observability import (  # noqa: E402
+    configure_logging, init_sentry, install_request_context, render_metrics,
+)
+
+_settings = get_settings()
+configure_logging(_settings.log_level, _settings.log_json)
 logger = logging.getLogger(__name__)
 
 
@@ -84,9 +91,18 @@ async def _warm_universe():
 async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
     logger.info("🚀 QuantAI Backend starting up…")
+    init_sentry(_settings.sentry_dsn, _settings.environment, _settings.sentry_traces_sample_rate)
     try:
         await init_db()
         logger.info("✅ Database initialised")
+        # Best-effort: make market_bars a TimescaleDB hypertable on Postgres
+        # (no-op on SQLite or when the extension is unavailable).
+        try:
+            from models.database import engine
+            from services.market_store import ensure_hypertables
+            await ensure_hypertables(engine)
+        except Exception as e:
+            logger.info(f"Hypertable setup skipped: {e}")
     except Exception as e:
         logger.warning(f"⚠️  Database unavailable — running in seed-data-only mode: {e}")
     # Eager Redis connect — absorb the 2s timeout at startup, not on first request
@@ -119,8 +135,7 @@ from services.rate_limit import install_rate_limiting  # noqa: E402
 install_rate_limiting(app)
 
 # ── CORS ─────────────────────────────────────────────────────────
-cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
-origins = [o.strip() for o in cors_origins_str.split(",") if o.strip()]
+origins = _settings.cors_origin_list
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -129,6 +144,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── OBSERVABILITY ─────────────────────────────────────────────────
+# Request-id propagation (X-Request-ID), per-request timing, structured access
+# logs, and HTTP metrics. Added after CORS so it wraps application handlers.
+install_request_context(app)
+
+# ── CSRF ──────────────────────────────────────────────────────────
+# Double-submit CSRF guard for cookie-authenticated mutating requests (Bearer
+# header + auth bootstrap endpoints are exempt). Closes the gap opened by cookie auth.
+from services.auth_service import install_csrf_protection  # noqa: E402
+
+install_csrf_protection(app)
 
 # ── GLOBAL EXCEPTION HANDLER ──────────────────────────────────────
 @app.exception_handler(Exception)
@@ -174,6 +201,16 @@ async def root():
     }
 
 
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Prometheus metrics: HTTP request counts/latency, cache hit-rate, and
+    per-source circuit-breaker state. Plain text, Prometheus exposition format."""
+    from fastapi.responses import PlainTextResponse
+    if not _settings.metrics_enabled:
+        return PlainTextResponse("# metrics disabled\n")
+    return PlainTextResponse(render_metrics(), media_type="text/plain; version=0.0.4")
+
+
 @app.get("/health")
 async def health(db = Depends(get_db)):
     from sqlalchemy import text
@@ -191,9 +228,14 @@ async def health(db = Depends(get_db)):
     except Exception as e:
         logger.warning(f"Healthcheck: Redis failed: {e}")
 
+    # Surface per-source circuit-breaker state so a tripped data source is
+    # observable from the health endpoint (audit §3.5 — observability).
+    from services.reliability import breaker_states
+
     return {
         "status": "healthy" if (db_ok and redis_ok) else "degraded",
         "database": "connected" if db_ok else "disconnected",
         "redis": "connected" if redis_ok else "disconnected",
+        "data_sources": breaker_states(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

@@ -1,7 +1,6 @@
 """Quant Lab Router — Custom factor model builder"""
 
 from fastapi import APIRouter, HTTPException
-from typing import Optional
 import pandas as pd
 
 from services.data_service import data_service, _gather_limited

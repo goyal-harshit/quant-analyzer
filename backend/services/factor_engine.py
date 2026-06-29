@@ -6,8 +6,6 @@ for the NSE/BSE universe using academic-grade methodologies.
 
 import numpy as np
 import pandas as pd
-from typing import Optional
-from scipy import stats
 import logging
 
 logger = logging.getLogger(__name__)

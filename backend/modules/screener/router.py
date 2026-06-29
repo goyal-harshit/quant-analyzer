@@ -8,13 +8,14 @@ import json
 import logging
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 import pandas as pd
 
 from models.schemas import ScreenerFilter, ScreenerResponse, ScreenerResult
 from services.data_service import data_service, _gather_limited, NIFTY_50_TICKERS
 from services.factor_engine import FactorEngine
-from services.seed_data import DEFAULT_TICKERS, get_seed_screener_results, get_seed_sectors, get_seed_fundamentals, get_seed_quote
-from services.cache_service import cache, TTL_FACTOR_SCORES
+from services.seed_data import get_seed_sectors, get_seed_fundamentals, get_seed_quote
+from services import portfolio_io
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +212,24 @@ async def screen_stocks(filters: ScreenerFilter):
         results=paginated,
         total=len(results),
         filtered=len(filtered),
+    )
+
+
+@router.post("/export")
+async def export_screen(filters: ScreenerFilter):
+    """Run a screen and return the filtered results as a CSV download.
+
+    Overrides pagination so the export contains the full filtered set, not just
+    one page.
+    """
+    full = filters.model_copy(update={"offset": 0, "limit": 1000})
+    resp = await screen_stocks(full)
+    rows = [r.model_dump() for r in resp.results]
+    body = portfolio_io.rows_to_csv(rows)
+    return Response(
+        content=body,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="screener.csv"'},
     )
 
 

@@ -12,9 +12,9 @@ from typing import Optional
 import pandas as pd
 
 from services.data_service import data_service
-from services.factor_engine import FactorEngine, PortfolioAnalytics
+from services.factor_engine import FactorEngine
 from services.seed_data import get_seed_quote, get_seed_fundamentals, DEFAULT_TICKERS
-from services.cache_service import cache, TTL_QUOTE, TTL_FUNDAMENTALS, TTL_PRICE_HISTORY, TTL_FACTOR_SCORES
+from services.cache_service import cache, TTL_PRICE_HISTORY, TTL_FACTOR_SCORES
 from services.ai_service import ai_service
 
 logger = logging.getLogger(__name__)

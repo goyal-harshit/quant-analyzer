@@ -45,4 +45,11 @@ celery_app.conf.beat_schedule = {
         "task": "services.tasks.warm_live_universe_task",
         "schedule": crontab(minute="*/30"),
     },
+    # Ingest-then-serve: refresh the market_* store from the guarded LIVE chain so
+    # the API serves fresh quotes/fundamentals/history straight from the DB. Safe
+    # to run periodically now that every source is behind a circuit breaker.
+    "refresh-market-store-every-30-min": {
+        "task": "services.tasks.refresh_market_store_task",
+        "schedule": crontab(minute="*/30"),
+    },
 }

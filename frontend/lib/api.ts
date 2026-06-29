@@ -12,32 +12,78 @@ const client = axios.create({
   // 45s is plenty for data/quote calls. Long-running LLM calls pass a per-request
   // override where needed rather than making every request wait up to 2 minutes.
   timeout: 45000,
+  // Send the httpOnly auth cookies with every request (the secure path; the JWT
+  // is no longer kept in localStorage where XSS could read it).
+  withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach Authorization header if token exists in localStorage
+// "authed" is a NON-sensitive marker (not the token) telling the client a session
+// likely exists, so it knows whether to attempt /me and silent refresh on 401.
+const AUTH_FLAG = "authed";
+// The CSRF token (double-submit). Safe to keep in JS — security comes from a
+// cross-site attacker being unable to read it. Captured from login/refresh bodies.
+const CSRF_KEY = "csrf";
+const MUTATING = ["post", "put", "patch", "delete"];
+
+function storeCsrf(data: any) {
+  if (typeof window !== "undefined" && data && typeof data === "object" && data.csrf_token) {
+    localStorage.setItem(CSRF_KEY, data.csrf_token);
+  }
+}
+
 client.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // Backward-compat: send any legacy localStorage token as a Bearer header.
+    // New logins don't store one — auth rides the httpOnly cookie.
+    const legacy = localStorage.getItem("token");
+    if (legacy) config.headers.Authorization = `Bearer ${legacy}`;
+    // Double-submit CSRF header on mutating requests.
+    if (MUTATING.includes((config.method || "get").toLowerCase())) {
+      const csrf = localStorage.getItem(CSRF_KEY);
+      if (csrf) config.headers["X-CSRF-Token"] = csrf;
     }
   }
   return config;
 });
 
-// On 401, if we HAD a token it's expired/invalid — clear it and bounce to login.
-// (A 401 with no token is just a guest hitting a protected route; let the page handle it.)
+function clearSession() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("token");
+  localStorage.removeItem(AUTH_FLAG);
+  localStorage.removeItem(CSRF_KEY);
+  if (window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
+}
+
+// On 401 for an apparently-authenticated user, try a one-shot silent refresh (uses
+// the httpOnly refresh cookie) and retry the original request. Guests (no session
+// marker) are left alone so public pages can handle their own 401s.
 client.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (typeof window !== "undefined" && error?.response?.status === 401) {
-      const hadToken = !!localStorage.getItem("token");
-      if (hadToken) {
-        localStorage.removeItem("token");
-        if (window.location.pathname !== "/login") {
-          window.location.href = "/login";
-        }
+  (response) => {
+    storeCsrf(response.data); // capture CSRF token from login/refresh bodies
+    return response;
+  },
+  async (error) => {
+    const original = error?.config;
+    const status = error?.response?.status;
+    const url: string = original?.url || "";
+    const isAuthCall =
+      url.includes("/auth/login") || url.includes("/auth/refresh") || url.includes("/auth/logout");
+
+    if (
+      status === 401 && original && !original._retry && !isAuthCall &&
+      typeof window !== "undefined" &&
+      (localStorage.getItem(AUTH_FLAG) || localStorage.getItem("token"))
+    ) {
+      original._retry = true;
+      try {
+        await client.post("/auth/refresh");
+        return client(original); // retry with the refreshed access cookie
+      } catch {
+        clearSession();
+        return Promise.reject(error);
       }
     }
     return Promise.reject(error);
@@ -190,7 +236,39 @@ export const portfolioApi = {
 
   getPerformance: (id: number, benchmark = "NIFTY50", period = "1y", refresh = false) =>
     client.get(`/portfolio/${id}/performance`, { params: { benchmark, period, refresh } }).then((r) => r.data),
+
+  importPositions: (id: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return client.post(`/portfolio/${id}/import`, form).then((r) => r.data);
+  },
+
+  // Export the valued portfolio as csv/xlsx/pdf and trigger a browser download.
+  exportPortfolio: async (id: number, name: string, format: "csv" | "xlsx" | "pdf") => {
+    const r = await client.get(`/portfolio/${id}/export`, {
+      params: { format },
+      responseType: "blob",
+    });
+    const safe = (name || "portfolio").replace(/[^a-zA-Z0-9_-]/g, "") || "portfolio";
+    downloadBlob(r.data, `${safe}.${format}`);
+  },
+
+  getTaxReport: (id: number) =>
+    client.get(`/portfolio/${id}/tax-report`).then((r) => r.data),
 };
+
+// Trigger a client-side download for a Blob response.
+function downloadBlob(blob: Blob, filename: string) {
+  if (typeof window === "undefined") return;
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 // ── BACKTEST ────────────────────────────────────────────────────
 export const backtestApi = {
@@ -337,8 +415,24 @@ export const authApi = {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     }).then((r) => r.data),
 
+  refresh: () => client.post("/auth/refresh").then((r) => r.data),
+
+  logout: () => client.post("/auth/logout").then((r) => r.data),
+
   me: () =>
     client.get("/auth/me").then((r) => r.data),
+
+  forgotPassword: (email: string) =>
+    client.post("/auth/forgot-password", { email }).then((r) => r.data),
+
+  resetPassword: (token: string, new_password: string) =>
+    client.post("/auth/reset-password", { token, new_password }).then((r) => r.data),
+
+  sendVerification: () =>
+    client.post("/auth/send-verification").then((r) => r.data),
+
+  verifyEmail: (token: string) =>
+    client.post("/auth/verify-email", { token }).then((r) => r.data),
 };
 
 

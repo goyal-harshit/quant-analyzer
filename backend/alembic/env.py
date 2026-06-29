@@ -14,9 +14,15 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
+# add your model's MetaData object here for 'autogenerate' support.
+# IMPORTANT: import every module that defines tables so they all register on
+# Base.metadata — otherwise autogenerate silently omits them.
 from models.database import Base
+from models import market_store as _market_store  # noqa: F401,E402
+from modules.mutual_funds import models as _mf_models  # noqa: F401,E402
+from modules.ipo import models as _ipo_models  # noqa: F401,E402
+from modules.simulator import models as _sim_models  # noqa: F401,E402
+
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -43,6 +49,8 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+        render_as_batch=True,  # SQLite can't ALTER in place — batch makes migrations portable
     )
 
     with context.begin_transaction():
@@ -50,7 +58,14 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True,
+        # Batch mode lets the same migration scripts run on SQLite (CI/dev) and
+        # Postgres (prod) — SQLite needs table-rebuild for most ALTERs.
+        render_as_batch=connection.dialect.name == "sqlite",
+    )
 
     with context.begin_transaction():
         context.run_migrations()

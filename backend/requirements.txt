@@ -41,5 +41,9 @@ slowapi==0.1.9
 beautifulsoup4==4.12.3
 lxml==5.3.0
 
+# ── File I/O & reporting (Phase C — all open-source) ─────────────
+openpyxl==3.1.5         # Excel (.xlsx) read/write for import + export
+reportlab==4.2.5        # PDF report generation, BSD-licensed
+
 # ── Utilities ───────────────────────────────────────────────────
 python-dotenv==1.0.1

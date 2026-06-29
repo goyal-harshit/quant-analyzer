@@ -18,8 +18,18 @@ services:
         value: "1440"
       - key: ENVIRONMENT
         value: production
+      # Schema is owned by Alembic migrations in prod (applied on startup by
+      # scripts/migrate.py); disable the dev-only create_all fallback.
+      - key: DB_AUTO_CREATE
+        value: "false"
       - key: CORS_ORIGINS
         value: https://goyal-harshit.github.io
+      # Cross-site cookies (GH Pages frontend → Render backend) require
+      # SameSite=None + Secure for the browser to send the httpOnly auth cookies.
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: COOKIE_SECURE
+        value: "true"
       - key: REDIS_URL
         value: ""
       - key: OLLAMA_HOST

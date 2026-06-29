@@ -7,7 +7,7 @@ users own their portfolios; guests create anonymous portfolios scoped by id.
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import get_db, User

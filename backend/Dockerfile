@@ -19,4 +19,6 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Apply DB migrations (idempotent; adopts an existing create_all DB safely) before
+# serving. A migration failure aborts startup rather than serving a bad schema.
+CMD ["sh", "-c", "python scripts/migrate.py && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]

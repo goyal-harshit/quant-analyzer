@@ -7,12 +7,11 @@ so API endpoints serve cached/precomputed data instantly.
 import asyncio
 import json
 import logging
-from concurrent.futures import ThreadPoolExecutor
 
 from services.celery_app import celery_app
 from models.database import AsyncSessionLocal
 from services.ingestion_service import ingestion_service
-from services.seed_data import DEFAULT_TICKERS, get_seed_fundamentals, get_seed_quote
+from services.seed_data import DEFAULT_TICKERS, get_seed_quote
 from services.cache_service import cache, TTL_FACTOR_SCORES, TTL_PRICE_HISTORY
 
 logger = logging.getLogger(__name__)
@@ -227,6 +226,42 @@ def warm_live_universe_task():
         await _gather_limited([data_service.get_fundamentals(t) for t in NIFTY_50_TICKERS], limit=3)
         await data_service.get_universe_overview(refresh=True)
         logger.info("Celery: live universe warm complete")
+
+    run_async(_run())
+
+
+@celery_app.task
+def refresh_market_store_task(limit_tickers: int = 50, period: str = "1y"):
+    """Ingest-then-serve refresh: pull live quotes + fundamentals + history for the
+    liquid universe through the guarded LIVE provider chain and upsert into the
+    `market_*` store so the API can serve fresh rows straight from the DB.
+
+    Safe to schedule (unlike the old yfinance jobs): every external call goes
+    through the per-source circuit breakers in services/reliability.py, so a
+    blocked source trips and is skipped instead of storming the worker."""
+    logger.info(f"Celery: refreshing market store for top {limit_tickers} tickers...")
+
+    async def _run():
+        from services import market_store
+        tickers = list(DEFAULT_TICKERS)[:limit_tickers]
+        sem = asyncio.Semaphore(6)
+
+        async def _one(t):
+            async with sem:
+                # Own session per coroutine — AsyncSession isn't concurrency-safe.
+                async with AsyncSessionLocal() as db:
+                    try:
+                        q = await market_store.ingest_quote(db, t)
+                        f = await market_store.ingest_fundamentals(db, t)
+                        n = await market_store.ingest_history(db, t, period)
+                        return q or f or bool(n)
+                    except Exception as e:
+                        logger.warning(f"Market store refresh failed for {t}: {e}")
+                        return False
+
+        results = await asyncio.gather(*(_one(t) for t in tickers), return_exceptions=True)
+        ok = sum(1 for r in results if r is True)
+        logger.info(f"Market store refreshed: {ok}/{len(tickers)} tickers had live data")
 
     run_async(_run())
 

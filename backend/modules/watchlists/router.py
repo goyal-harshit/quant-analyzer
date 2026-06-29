@@ -3,7 +3,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import Optional
 
 from models.database import get_db, User, Watchlist
 from models.schemas import WatchlistCreate, WatchlistOut

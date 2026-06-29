@@ -3,7 +3,6 @@
 from fastapi import APIRouter, HTTPException
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
 from models.schemas import BacktestRequest, BacktestResponse, BacktestMetrics, BacktestDataPoint
 from services.data_service import data_service, _gather_limited
