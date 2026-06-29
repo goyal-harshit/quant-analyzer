@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Send, MessageSquare, Cpu, RefreshCw } from 'lucide-react'
+import { Send, Cpu, RefreshCw, Database, BookOpen } from 'lucide-react'
 import { T, pct } from '@/lib/stockData'
 import { aiApi } from '@/lib/api'
 import ModelSelector from '@/components/ai/ModelSelector'
@@ -20,12 +20,28 @@ const OFFLINE_STOCKS = [
 ]
 
 const QUICK = [
-  'Analyze HDFC Bank vs ICICI Bank quality factors',
-  'Impact of RBI rate cuts on NBFC sector',
+  'Analyze HDFC Bank vs ICICI Bank quality factors with citations',
+  'What does the indexed data say about Reliance valuation?',
   'Best large-cap IT stocks for FY26 — growth vs valuations',
   'Explain momentum investing for Indian markets',
   'Nifty 50 sector rotation — current macro regime signal',
 ]
+
+type RagSource = {
+  n?: number
+  ref?: string | null
+  title?: string | null
+  kind?: string | null
+  score?: number | null
+}
+
+type ChatMessage = {
+  role: string
+  content: string
+  source?: string
+  sources?: RagSource[]
+  grounded?: boolean
+}
 
 function Tag({ children, color = '#a78bfa' }: { children: any; color?: string }) {
   return <span style={{ background: `${color}22`, color, border: `1px solid ${color}44`, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{children}</span>
@@ -56,17 +72,23 @@ export default function AIChat() {
   const activeModel = getActiveModel()
   const providerInfo = PROVIDERS[provider]
 
-  const [msgs, setMsgs] = useState<{ role: string; content: string; source?: string }[]>([
+  const [msgs, setMsgs] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: 'Namaste! I\'m QuantAI — your Indian equity research assistant.\n\nI can help you:\n• Analyze Nifty 500 stocks and compare fundamentals\n• Discuss RBI policy impacts on sectors\n• Explain quantitative factors and factor investing\n• Research any NSE/BSE listed company\n• Interpret macro data for investment context\n\nSelect your AI model from the sidebar or the panel below, then ask away.',
+      content: 'Namaste! I\'m QuantAI — your Indian equity research assistant.\n\nAsk about indexed stocks, fundamentals, factors, sectors, or macro context. I will use the project RAG index first and show citations when matching data is available.',
     },
   ])
   const [inp, setInp] = useState('')
   const [load, setLoad] = useState(false)
   const [showModelPanel, setShowModelPanel] = useState(false)
+  const [ragStatus, setRagStatus] = useState<{ documents: number; stock_documents: number } | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   useEffect(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [msgs])
+  useEffect(() => {
+    aiApi.ragStatus()
+      .then(setRagStatus)
+      .catch(() => setRagStatus(null))
+  }, [])
 
   async function send() {
     if (!inp.trim() || load) return
@@ -76,14 +98,14 @@ export default function AIChat() {
     setMsgs(next)
     setLoad(true)
     try {
-      const apiMsgs = next.filter((m, i) => !(m.role === 'assistant' && i === 0)).map(m => ({ role: m.role, content: m.content }))
-      const d = await aiApi.chat({
-        messages: apiMsgs,
-        provider,
-        model: modelId,
-        api_key: getApiKey() || undefined,
-      })
-      setMsgs(p => [...p, { role: 'assistant', content: d.response || d.content, source: d.source || provider }])
+      const d = await aiApi.ask(q, 5)
+      setMsgs(p => [...p, {
+        role: 'assistant',
+        content: d.answer || d.response || d.content,
+        source: d.grounded ? 'rag' : (d.source || provider),
+        sources: d.sources || [],
+        grounded: Boolean(d.grounded),
+      }])
     } catch {
       setMsgs(p => [...p, { role: 'assistant', content: buildOfflineChatReply(q), source: 'offline' }])
     }
@@ -109,6 +131,17 @@ export default function AIChat() {
             <span style={{ fontSize: 9, opacity: 0.7 }}>▼</span>
           </button>
           <span style={{ fontSize: 11, color: T.muted }}>Indian equity specialist</span>
+          <span
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: ragStatus?.documents ? T.green : T.muted,
+              border: `1px solid ${ragStatus?.documents ? T.green + '44' : T.b}`, borderRadius: 999, padding: '4px 9px',
+              background: ragStatus?.documents ? T.green + '12' : T.el,
+            }}
+            title="Indexed documents available for grounded answers"
+          >
+            <Database size={11} />
+            {ragStatus ? `${ragStatus.documents} indexed docs` : 'RAG status unavailable'}
+          </span>
         </div>
       </div>
 
@@ -146,10 +179,30 @@ export default function AIChat() {
               {m.role === 'assistant' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <span style={{ fontSize: 10, color: T.blue, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>QuantAI</span>
-                  {m.source && <Tag color={m.source === 'offline' ? T.amber : T.green}>{m.source === 'offline' ? 'Offline' : m.source}</Tag>}
+                  {m.source && <Tag color={m.source === 'offline' ? T.amber : m.source === 'rag' ? T.blue : T.green}>{m.source === 'offline' ? 'Offline' : m.source === 'rag' ? 'Grounded' : m.source}</Tag>}
                 </div>
               )}
               {m.content}
+              {m.sources && m.sources.length > 0 && (
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.b}`, display: 'grid', gap: 7 }}>
+                  {m.sources.map((s, idx) => (
+                    <div
+                      key={`${s.ref || s.title || idx}`}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 8,
+                        color: T.sub, fontSize: 11, lineHeight: 1.45,
+                      }}
+                    >
+                      <BookOpen size={13} style={{ color: T.blue, marginTop: 1, flexShrink: 0 }} />
+                      <span>
+                        <strong style={{ color: T.text }}>[{s.n ?? idx + 1}] {s.title || s.ref || 'Indexed source'}</strong>
+                        {s.kind ? <span> · {s.kind}</span> : null}
+                        {typeof s.score === 'number' ? <span> · score {s.score.toFixed(2)}</span> : null}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ))}
