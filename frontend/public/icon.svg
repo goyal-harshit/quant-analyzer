@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="QuantAI">
+  <rect width="512" height="512" rx="96" fill="#030712"/>
+  <rect x="48" y="48" width="416" height="416" rx="64" fill="#0a1020" stroke="#1e2d4a" stroke-width="12"/>
+  <path d="M132 326V186h60c38 0 66 29 66 70 0 17-5 33-14 45l38 44h-44l-21-25c-8 4-17 6-27 6h-58zm38-34h20c18 0 30-15 30-36s-12-36-30-36h-20v72z" fill="#e2e8f0"/>
+  <path d="M306 326l54-140h42l54 140h-41l-9-26h-52l-9 26h-39zm58-58h32l-16-47-16 47z" fill="#3b82f6"/>
+  <path d="M104 374h304" stroke="#22c55e" stroke-width="18" stroke-linecap="round"/>
+</svg>

@@ -203,9 +203,13 @@ export const stocksApi = {
 };
 
 // ── SCREENER ────────────────────────────────────────────────────
+// Cold-cache screener runs scrape screener.in + Yahoo per stock across the Nifty 500
+// with rate-limit backoff, which can take well over the default 45s — give it room.
+const SCREENER_TIMEOUT = { timeout: 120000 };
+
 export const screenerApi = {
   screen: (filters: Record<string, any>) =>
-    client.post<{ results: ScreenerResult[]; total: number; filtered: number }>("/screener", filters)
+    client.post<{ results: ScreenerResult[]; total: number; filtered: number }>("/screener", filters, SCREENER_TIMEOUT)
       .then((r) => r.data),
 
   getSectors: () => client.get<{ sectors: string[] }>("/screener/sectors").then((r) => r.data),
@@ -372,12 +376,33 @@ export const earningsApi = {
 };
 
 // ── QUANT LAB ─────────────────────────────────────────────────────
+// The factor lab scores up to 500 names and can run optimisation / Monte-Carlo,
+// so give these calls the same generous timeout as the screener.
+const QUANTLAB_TIMEOUT = { timeout: 120000 };
+
 export const quantLabApi = {
   scoreUniverse: (request: Record<string, any>) =>
     client.post("/quant-lab/score", request).then((r) => r.data),
 
   getFactorDefinitions: () =>
-    client.get("/quant-lab/factor-definitions").then((r) => r.data),
+    client.get<Record<string, { label: string; description: string; family: string }>>(
+      "/quant-lab/factor-definitions",
+    ).then((r) => r.data),
+
+  score: (body: { name: string; factor_weights: Record<string, number>; universe: string }) =>
+    client.post<{ model_name: string; factors: string[]; weights: Record<string, number>; count: number; results: any[] }>(
+      "/quant-lab/score", body, QUANTLAB_TIMEOUT,
+    ).then((r) => r.data),
+
+  optimize: (body: { name: string; factor_weights: Record<string, number>; universe: string }) =>
+    client.post<{ model_name: string; holdings: any[]; metrics: Record<string, number> }>(
+      "/quant-lab/optimize", body, QUANTLAB_TIMEOUT,
+    ).then((r) => r.data),
+
+  monteCarlo: (body: { name: string; factor_weights: Record<string, number>; universe: string }) =>
+    client.post<{ projected_return_pct: Record<string, number>; prob_loss_pct: number; expected_value: number; simulations: number; horizon_days: number }>(
+      "/quant-lab/monte-carlo", body, QUANTLAB_TIMEOUT,
+    ).then((r) => r.data),
 };
 
 // ── STRATEGY BUILDER ──────────────────────────────────────────────

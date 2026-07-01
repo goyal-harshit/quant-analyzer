@@ -6,6 +6,7 @@ import { T, pct } from '@/lib/stockData'
 import { aiApi } from '@/lib/api'
 import ModelSelector from '@/components/ai/ModelSelector'
 import { useModelStore, PROVIDERS } from '@/lib/model-store'
+import MarkdownRenderer from '@/components/ui/MarkdownRenderer'
 
 const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
 
@@ -113,7 +114,19 @@ export default function AIChat() {
   }
 
   return (
-    <div style={{ padding: '26px 30px', maxWidth: 860, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', fontFamily: T.sans }}>
+    <div
+      style={{
+        width: '100%',
+        maxWidth: 920,
+        minWidth: 0,
+        margin: '0 auto',
+        display: 'flex',
+        flexDirection: 'column',
+        height: 'calc(100dvh - 128px)',
+        minHeight: 520,
+        fontFamily: T.sans,
+      }}
+    >
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>QuantAI Research Assistant</div>
         <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -164,16 +177,17 @@ export default function AIChat() {
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 8 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 8 }}>
         {msgs.map((m, i) => (
           <div key={i} style={{ marginBottom: 14, display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
             <div
               style={{
-                maxWidth: '82%',
+                maxWidth: 'min(82%, 680px)',
                 background: m.role === 'user' ? T.blue : T.el,
                 border: `1px solid ${m.role === 'user' ? T.blue + '66' : T.b}`,
                 borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '12px 12px 12px 3px',
-                padding: '11px 15px', fontSize: 13, color: T.text, lineHeight: 1.75, whiteSpace: 'pre-wrap',
+                padding: '11px 15px', fontSize: 13, color: T.text, lineHeight: 1.75,
+                whiteSpace: m.role === 'user' ? 'pre-wrap' : undefined,
               }}
             >
               {m.role === 'assistant' && (
@@ -182,7 +196,7 @@ export default function AIChat() {
                   {m.source && <Tag color={m.source === 'offline' ? T.amber : m.source === 'rag' ? T.blue : T.green}>{m.source === 'offline' ? 'Offline' : m.source === 'rag' ? 'Grounded' : m.source}</Tag>}
                 </div>
               )}
-              {m.content}
+              {m.role === 'user' ? m.content : <MarkdownRenderer content={m.content} />}
               {m.sources && m.sources.length > 0 && (
                 <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.b}`, display: 'grid', gap: 7 }}>
                   {m.sources.map((s, idx) => (
@@ -221,14 +235,14 @@ export default function AIChat() {
         <div ref={endRef} />
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+      <div style={{ display: 'flex', gap: 10, marginTop: 12, minWidth: 0 }}>
         <input
           value={inp}
           onChange={e => setInp(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
           placeholder="Ask about Indian stocks, sectors, macro factors, quant strategies…"
           style={{
-            flex: 1, background: T.el, border: `1px solid ${T.bhi}`, borderRadius: 9,
+            flex: 1, minWidth: 0, background: T.el, border: `1px solid ${T.bhi}`, borderRadius: 9,
             padding: '11px 15px', fontSize: 13, color: T.text, outline: 'none', fontFamily: T.sans,
           }}
         />

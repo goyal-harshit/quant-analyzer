@@ -16,8 +16,22 @@ export default function LayoutShell({ children }: LayoutShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false) // mobile off-canvas drawer
   const [isMobile, setIsMobile] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
   const pathname = usePathname()
   const isStandalonePage = pathname === '/login' || pathname === '/register' || pathname === '/'
+
+  // Track online status
+  useEffect(() => {
+    setIsOffline(!navigator.onLine)
+    const onOnline = () => setIsOffline(false)
+    const onOffline = () => setIsOffline(true)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
 
   // Track viewport so the sidebar is a fixed rail on desktop but an off-canvas
   // drawer on mobile (where a 224px margin would crush the content).
@@ -90,6 +104,13 @@ export default function LayoutShell({ children }: LayoutShellProps) {
           </div>
         </main>
       </div>
+
+      {isOffline && (
+        <div className="fixed bottom-4 right-4 bg-amber-500/10 border border-amber-500/30 text-amber-500 px-4 py-2.5 rounded-lg text-xs font-semibold shadow-lg backdrop-blur-md z-50 flex items-center gap-2 animate-bounce">
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          <span>You are currently offline. Serving cached data.</span>
+        </div>
+      )}
 
       <CommandPalette isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>

@@ -206,6 +206,115 @@ class FactorEngine:
         """
         return self._rank(-market_caps.clip(0)).clip(0, 100)
 
+    # ── SHORT-TERM REVERSAL ──────────────────────────────────────
+    def compute_reversal_score(self, prices: pd.DataFrame) -> pd.Series:
+        """
+        Short-term reversal (Jegadeesh 1990, Lehmann 1990).
+        Last-month losers tend to bounce. High score = weak last month.
+        """
+        if len(prices) < 21:
+            return pd.Series(dtype=float)
+        last_month = (prices.iloc[-1] / prices.iloc[-21]) - 1
+        return self._rank(-last_month).clip(0, 100)
+
+    # ── PROFITABILITY ────────────────────────────────────────────
+    def compute_profitability_score(self, fundamentals: pd.DataFrame) -> pd.Series:
+        """
+        Gross profitability & returns on capital (Novy-Marx 2013).
+        Distinct from Quality: pure return-on-capital, no leverage penalty.
+        """
+        scores = pd.DataFrame(index=fundamentals.index)
+        if "roe" in fundamentals.columns:
+            scores["roe"] = self._rank(fundamentals["roe"].clip(-50, 150))
+        if "roa" in fundamentals.columns:
+            scores["roa"] = self._rank(fundamentals["roa"].clip(-30, 60))
+        if "gross_margin" in fundamentals.columns:
+            scores["gm"] = self._rank(fundamentals["gross_margin"].clip(0, 100))
+        if "net_margin" in fundamentals.columns:
+            scores["nm"] = self._rank(fundamentals["net_margin"].clip(-20, 60))
+        if scores.empty:
+            return pd.Series(dtype=float)
+        return scores.mean(axis=1).clip(0, 100)
+
+    # ── FINANCIAL HEALTH / LEVERAGE ──────────────────────────────
+    def compute_financial_health_score(self, fundamentals: pd.DataFrame) -> pd.Series:
+        """
+        Balance-sheet strength: low leverage, high interest coverage & liquidity.
+        High score = financially resilient (defensive tilt).
+        """
+        scores = pd.DataFrame(index=fundamentals.index)
+        if "debt_equity" in fundamentals.columns:
+            scores["lev"] = self._rank(-fundamentals["debt_equity"].clip(0, 20))
+        if "interest_coverage" in fundamentals.columns:
+            scores["cov"] = self._rank(fundamentals["interest_coverage"].clip(0, 50))
+        if "current_ratio" in fundamentals.columns:
+            scores["cr"] = self._rank(fundamentals["current_ratio"].clip(0, 5))
+        if scores.empty:
+            return pd.Series(dtype=float)
+        return scores.mean(axis=1).clip(0, 100)
+
+    # ── DIVIDEND / SHAREHOLDER YIELD ─────────────────────────────
+    def compute_dividend_score(self, fundamentals: pd.DataFrame) -> pd.Series:
+        """Dividend yield rank — income / shareholder-return tilt."""
+        if "dividend_yield" not in fundamentals.columns:
+            return pd.Series(dtype=float)
+        return self._rank(fundamentals["dividend_yield"].clip(0, 15)).clip(0, 100)
+
+    # ── LIQUIDITY ────────────────────────────────────────────────
+    def compute_liquidity_score(self, fundamentals: pd.DataFrame) -> pd.Series:
+        """
+        Tradability proxy (inverse Amihud illiquidity). Larger caps trade
+        more freely — high score = more liquid / easier to size positions.
+        """
+        if "market_cap" not in fundamentals.columns:
+            return pd.Series(dtype=float)
+        mc = fundamentals["market_cap"].clip(lower=1)
+        return self._rank(np.log(mc)).clip(0, 100)
+
+    # ── BETA (low-beta anomaly) ──────────────────────────────────
+    def compute_beta_score(self, prices: pd.DataFrame, window: int = 252) -> pd.Series:
+        """
+        Low-beta factor (Frazzini & Pedersen 2014, 'Betting Against Beta').
+        Beta measured vs the equal-weight universe. High score = low beta.
+        """
+        if prices.shape[1] < 2 or len(prices) < 60:
+            return pd.Series(dtype=float)
+        rets = prices.pct_change().dropna().tail(window)
+        if rets.empty:
+            return pd.Series(dtype=float)
+        market = rets.mean(axis=1)
+        var_m = market.var()
+        if not var_m or var_m <= 0:
+            return pd.Series(dtype=float)
+        betas = rets.apply(lambda col: col.cov(market) / var_m)
+        return self._rank(-betas).clip(0, 100)
+
+    # ── EARNINGS QUALITY ─────────────────────────────────────────
+    def compute_earnings_quality_score(self, fundamentals: pd.DataFrame) -> pd.Series:
+        """
+        Earnings quality: low accruals (Sloan 1996) where available, else the
+        Piotroski F-Score scaled to 0-100.
+        """
+        if "accruals_ratio" in fundamentals.columns and fundamentals["accruals_ratio"].notna().any():
+            return self._rank(-fundamentals["accruals_ratio"]).clip(0, 100)
+        f = self.piotroski_f_score(fundamentals)
+        if f.notna().any() and (f > 0).any():
+            return (f / 9 * 100).clip(0, 100)
+        return pd.Series(dtype=float)
+
+    # ── TREND (price vs long moving average) ─────────────────────
+    def compute_trend_score(self, prices: pd.DataFrame, window: int = 200) -> pd.Series:
+        """
+        Trend-following: distance of price above its long-term moving average.
+        High score = strong, persistent uptrend.
+        """
+        w = min(window, len(prices) - 1)
+        if w < 20:
+            return pd.Series(dtype=float)
+        ma = prices.tail(w).mean()
+        dist = (prices.iloc[-1] / ma) - 1
+        return self._rank(dist).clip(0, 100)
+
     # ── COMPOSITE SCORE ──────────────────────────────────────────
     def compute_composite(
         self,

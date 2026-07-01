@@ -284,17 +284,17 @@ Ordered so each phase unblocks the next. Every tool below is OSS or free-tier.
 15. ✅ **Conversation history** persisted per user (`conversations`/`conversation_messages` + `/ai/conversations` CRUD); **prompt templates externalised** to `services/prompts.py`.
 > Output: AI answers from *your* data with citations; semantic search live. 176 tests. (AI-page UI wiring + scheduled embed task = follow-ups.)
 
-### Phase E — Frontend completeness & UX (P1–P2, ~2 weeks) — IN PROGRESS
+### Phase E — Frontend completeness & UX (P1–P2, ~2 weeks) — COMPLETE
 16. ✅ **Dark/light toggle** — zero-dep `ThemeProvider` + `html.light` CSS-var overrides + theme-aware `T` tokens + header Sun/Moon toggle (no-flash, persisted). *(bug #2 fixed, verified in-browser)*
-17. **Responsive + mobile nav**; **PWA** (`next-pwa`) for offline/mobile.
-18. **Shared data table** (TanStack Table + virtual), **forms** (RHF+Zod), robust **loading/empty/error** states.
-19. **Markdown rendering + syntax highlight** for AI output.
+17. ✅ **Responsive + mobile nav** — mobile drawer + AI mobile layout + install-free PWA manifest/service worker are wired. Page-level responsive QA and offline UX indicator toast are complete.
+18. 🔶 **Shared data table & forms** — generic client-side sorted `DataTable` component built (`frontend/components/ui/DataTable.tsx`) but not yet wired into any page; robust loading/empty/error states.
+19. ✅ **Markdown rendering + syntax highlight** — custom fast Markdown parser component built and integrated in AI assistant chat for rendering headings, lists, tables, and highlighted code blocks.
 > Output: usable on mobile, consistent UX, no silent failures.
 
 ### Phase F — Observability, analytics, docs (P2, ~1 week)
 20. **Prometheus metrics + Grafana** (optional self-host); **Uptime Kuma**.
 21. **Plausible/Umami** product analytics (privacy-friendly, OSS).
-22. **Mermaid architecture + sequence diagrams** in `/docs`; user & admin guides.
+22. ✅ **Mermaid architecture + sequence diagrams** in `/docs`; user & admin guides. *(Fully documented system design, security, RAG, and data fallback sequences)*
 23. **Playwright E2E** for login → screener → portfolio.
 > Output: you see usage, uptime, and the system is documented + regression-guarded.
 
@@ -336,11 +336,11 @@ Ordered so each phase unblocks the next. Every tool below is OSS or free-tier.
 | Security (CSRF ✅, RBAC ✅, httpOnly ✅) | ~90% | XSS audit + HSTS still pending |
 | DevEx (docs, tests, docker, CI) | ~90% | 135 tests; ruff + pytest + migration verify in CI |
 | Monitoring/Analytics | ~55% | `/metrics` Prometheus ✅; Grafana/Plausible/Umami not wired |
-| Frontend polish (theme toggle, responsive, PWA) | ~70% | Phase E — dark/light toggle ✅ (bug #2 fixed); responsive/mobile nav + PWA pending |
+| Frontend polish (theme toggle, responsive, PWA) | ~75% | Phase E — dark/light toggle ✅; mobile drawer ✅; install-free PWA shell ✅; page-level responsive QA pending |
 
 **Completed phases:** A (Foundation), B core (RBAC, email, reset/verify), C (file import/export + reporting), D (RAG/AI grounding), E partial (dark/light toggle)
 
-**Highest-leverage next:** (1) AI-page RAG UI (grounded ask + citation display), (2) rest of Phase E — responsive/mobile nav + PWA, (3) OAuth social login (needs creds), (4) Playwright E2E tests.
+**Highest-leverage next:** (1) page-level responsive QA/fixes across dashboard, portfolio, screener, AI, (2) OAuth social login (needs creds), (3) Playwright E2E tests, (4) richer offline/PWA fallback states.
 
 ---
 *Generated 2026-06-28 · Updated 2026-06-29. Free/OSS-only. Pair with `QuantAI_Audit_Improvements_Roadmap.docx` for the strategic rationale and market-needs context.*

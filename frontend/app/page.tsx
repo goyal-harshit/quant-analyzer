@@ -209,6 +209,10 @@ export default function LandingPage() {
     return () => clearInterval(interval)
   }, [])
 
+  // Live only when the API actually returned universe data; otherwise we render
+  // the RAW/SCREENER_DATA sample set and must not badge it as "LIVE".
+  const isLive = universe.length > 0
+
   const streamList = universe.length > 0
     ? universe
     : RAW.map(s => ({ ticker: s[0], name: s[1], price: s[2], change_pct: s[3] }))
@@ -272,8 +276,10 @@ export default function LandingPage() {
         <div className="ticker-stream">
           <div className="stream-header">
             <div className="stream-title">
-              📡 Live Market Feed
-              <span className="live-badge">● LIVE</span>
+              📡 {isLive ? 'Live Market Feed' : 'Market Feed'}
+              {isLive
+                ? <span className="live-badge">● LIVE</span>
+                : <span className="live-badge" style={{ background: 'rgba(244,63,94,.15)', borderColor: 'rgba(244,63,94,.35)', color: '#f43f5e' }}>● SAMPLE</span>}
             </div>
             <button
               onClick={fetchData}
@@ -334,7 +340,7 @@ export default function LandingPage() {
             {icon: '🔍', title: 'Quant Screener', desc: 'Screen the Nifty 500 universe by factor scores, fundamentals, technicals, and sector. Combine up to 20 conditions. Export to CSV.', cls: 'cyan'},
             {icon: '🤖', title: 'AI Research Assistant', desc: 'Powered by open-source LLMs via Ollama (Llama 3.2, Qwen2.5, Mistral). Deep-dive analysis, earnings summaries, macro commentary — zero API bill.', cls: 'green'},
             {icon: '💼', title: 'Portfolio Analytics', desc: 'Sector allocation, Sharpe ratio, beta, max drawdown, factor exposure decomposition. Full portfolio risk dashboard in real time.', cls: 'purple'},
-            {icon: '⚗️', title: 'Quant Lab', desc: 'Build and backtest custom factor models in a sandboxed Python environment. Strategy Builder lets you compose no-code rule trees.', cls: 'warn'},
+            {icon: '⚗️', title: 'Quant Lab', desc: 'Build custom 15-factor models with adjustable weights, rank the Nifty 500, optimise a factor-tilted portfolio, and run Monte-Carlo simulations.', cls: 'warn'},
             {icon: '🌐', title: 'Macro Dashboard', desc: 'RBI policy rates, CPI, IIP, FII/DII flows, INR/USD, India VIX — all in one macro overlay. Understand the regime before you size a position.', cls: 'red'},
           ].map(f => (
             <div key={f.title} className="feature-card">

@@ -1,14 +1,35 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { Toaster } from 'react-hot-toast'
 import QueryProvider from '@/components/providers/QueryProvider'
 import { AuthProvider } from '@/components/auth/AuthProvider'
 import { ThemeProvider, themeNoFlashScript } from '@/components/providers/ThemeProvider'
 import LayoutShell from '@/components/layout/LayoutShell'
+import PwaRegister from '@/components/providers/PwaRegister'
+
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
 
 export const metadata: Metadata = {
   title: 'QuantAI - India-First Quantitative Investment Analyzer',
   description: 'AI-powered quantitative investment analytics platform for Indian equities',
+  applicationName: 'QuantAI',
+  manifest: `${basePath}/manifest.webmanifest`,
+  appleWebApp: {
+    capable: true,
+    title: 'QuantAI',
+    statusBarStyle: 'black-translucent',
+  },
+  icons: {
+    icon: `${basePath}/icon.svg`,
+    apple: `${basePath}/icon.svg`,
+  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#0a1020',
 }
 
 export default function RootLayout({
@@ -35,6 +56,7 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             <AuthProvider>
+              <PwaRegister />
               <LayoutShell>
                 {children}
               </LayoutShell>

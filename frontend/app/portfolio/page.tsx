@@ -50,7 +50,7 @@ function CT({ active, payload, label }: { active?: any; payload?: any; label?: a
 
 export default function Portfolio() {
   const qc = useQueryClient()
-  const { data: portfolios, isLoading: ploading } = usePortfolios()
+  const { data: portfolios, isLoading: ploading, isError: portfoliosError } = usePortfolios()
   const [selId, setSelId] = useState<number | null>(null)
   const [refreshSeed, setRefreshSeed] = useState(0)
   const { data: portfolio, isLoading: p2loading } = usePortfolio(selId || 0, refreshSeed)
@@ -164,6 +164,29 @@ export default function Portfolio() {
     )
   }
 
+  if (portfoliosError) {
+    return (
+      <div style={{ padding: '26px 30px', maxWidth: 1200, fontFamily: T.sans }}>
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Portfolio Analytics</div>
+          <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>India Equity Portfolio · NSE Listed</div>
+        </div>
+        <div style={card({ padding: '60px 20px', textAlign: 'center' })}>
+          <div style={{ fontSize: 16, color: T.sub, marginBottom: 16 }}>Sign in to view and manage your portfolio.</div>
+          <a
+            href="/login"
+            style={{
+              display: 'inline-block', background: T.blue, color: '#fff', textDecoration: 'none',
+              padding: '10px 24px', borderRadius: 8, fontSize: 14, fontWeight: 600, fontFamily: T.sans,
+            }}
+          >
+            Sign In
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   if (portfolios && portfolios.length === 0) {
     return (
       <div style={{ padding: '26px 30px', maxWidth: 1200, fontFamily: T.sans }}>
@@ -207,12 +230,12 @@ export default function Portfolio() {
 
   return (
     <div style={{ padding: '26px 30px', maxWidth: 1200, fontFamily: T.sans }}>
-      <div style={{ marginBottom: 22, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-[22px]">
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Portfolio Analytics</div>
           <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>{portfolio.name} · India Equity Portfolio</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div className="flex flex-wrap gap-2 items-center">
           <button
             onClick={() => setRefreshSeed(prev => prev + 1)}
             style={{
@@ -272,7 +295,7 @@ export default function Portfolio() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 18 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-[18px]">
         <Stat label="Portfolio Value" value={fI(totVal)} sub="Current market value" icon={Database} />
         <Stat
           label="Total P&L"
@@ -285,8 +308,8 @@ export default function Portfolio() {
         <Stat label="Sharpe Ratio" value={portfolio.sharpe ?? 'N/A'} sub="12-month trailing" icon={Shield} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14, marginBottom: 14 }}>
-        <div style={card({ padding: '16px 18px' })}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 mb-3.5">
+        <div style={card({ padding: '16px 18px' })} className="lg:col-span-2">
           <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 14 }}>Performance vs Benchmark (1Y)</div>
           <ResponsiveContainer width="100%" height={185}>
             <AreaChart data={portPts} margin={{ top: 4, right: 4, bottom: 0, left: 20 }}>

@@ -24,6 +24,9 @@ export default function Screener() {
   const [sort, setSort] = useState({ key: 'composite_score', dir: 'desc' })
   const [q, setQ] = useState('')
   const [refreshSeed, setRefreshSeed] = useState(0)
+  // NIFTY50 = live-warmed real data (fast, 50 names). NIFTY500 = full breadth
+  // (500 names) scored on warm-cache-where-available + deterministic estimates.
+  const [universe, setUniverse] = useState<'NIFTY50' | 'NIFTY500'>('NIFTY50')
 
   // Fetch available sectors
   const { data: sectorData } = useSectors()
@@ -40,11 +43,12 @@ export default function Screener() {
     min_composite: flt.minScore === 0 ? null : flt.minScore,
     sort_by: sort.key,
     sort_dir: sort.dir,
+    universe,
     limit: 100,
     offset: 0
   }
 
-  const { data: screenData, isLoading } = useScreener(apiFilters, refreshSeed)
+  const { data: screenData, isLoading, isError, refetch } = useScreener(apiFilters, refreshSeed)
 
   const rows = (screenData?.results || []).filter(s =>
     q === '' || s.ticker.includes(q.toUpperCase()) || s.name.toLowerCase().includes(q.toLowerCase())
@@ -73,26 +77,53 @@ export default function Screener() {
   }
 
   return (
-    <div style={{ padding: '26px 30px', maxWidth: 1400, fontFamily: T.sans }}>
-      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ padding: '26px 30px', maxWidth: 1400, fontFamily: T.sans }} className="w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>Factor Screener</div>
           <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>
-            Screening {rows.length} of {screenData?.total || 0} stocks — Nifty 500 universe
+            Screening {rows.length} of {screenData?.total || 0} stocks — {universe === 'NIFTY500' ? 'Nifty 500 broad universe' : 'Nifty 50 (live)'}
           </div>
         </div>
-        <button 
-          onClick={() => setRefreshSeed(prev => prev + 1)} 
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 12px', background: T.el, border: `1px solid ${T.b}`,
-            borderRadius: 6, fontSize: 12, color: T.sub, cursor: 'pointer'
-          }}
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2 w-fit">
+          {/* Universe toggle: live-50 vs broad-500 */}
+          <div style={{ display: 'flex', background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, overflow: 'hidden' }}>
+            {([['NIFTY50', 'Nifty 50 · Live'], ['NIFTY500', 'Nifty 500']] as const).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setUniverse(val)}
+                style={{
+                  padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  border: 'none', fontFamily: T.sans,
+                  background: universe === val ? `${T.blue}22` : 'transparent',
+                  color: universe === val ? T.blue : T.sub,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setRefreshSeed(prev => prev + 1)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', background: T.el, border: `1px solid ${T.b}`,
+              borderRadius: 6, fontSize: 12, color: T.sub, cursor: 'pointer'
+            }}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh
+          </button>
+        </div>
       </div>
+      {universe === 'NIFTY500' && (
+        <div style={{
+          fontSize: 11, color: T.sub, marginBottom: 14, padding: '7px 12px',
+          background: `${T.amber}14`, border: `1px solid ${T.amber}33`, borderRadius: 6,
+        }}>
+          Broad mode ranks 500 NSE names. Live data is used where warm; the rest use deterministic model estimates. Switch to <b>Nifty 50 · Live</b> for fully live fundamentals.
+        </div>
+      )}
 
       <div style={card({ padding: '14px 18px', marginBottom: 18 })}>
         {/* Quick preset chips */}
@@ -129,62 +160,87 @@ export default function Screener() {
               padding: '4px 12px', borderRadius: 100, fontSize: 11, fontWeight: 600,
               cursor: 'pointer', fontFamily: T.sans,
               background: 'transparent', border: `1px dashed ${T.b}`, color: T.muted,
-              marginLeft: 'auto',
             }}
+            className="sm:ml-auto"
           >
             Reset
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>SECTOR</div>
-            <select
-              value={flt.sector}
-              onChange={e => setFlt(f => ({ ...f, sector: e.target.value }))}
-              style={{ background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T.text, cursor: 'pointer' }}
-            >
-              {sectors.map(s => <option key={s}>{s}</option>)}
-            </select>
+        <div className="flex flex-col md:flex-row md:items-end gap-4 w-full">
+          <div className="flex flex-wrap items-end gap-4 flex-1">
+            <div className="flex flex-col">
+              <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>SECTOR</div>
+              <select
+                value={flt.sector}
+                onChange={e => setFlt(f => ({ ...f, sector: e.target.value }))}
+                style={{ background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: T.text, cursor: 'pointer' }}
+                className="w-full sm:w-auto min-w-[120px]"
+              >
+                {sectors.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+
+            {[
+              { label: 'MIN ROE%', k: 'minRoe', max: 40 },
+              { label: 'MAX PE', k: 'maxPe', max: 100 },
+              { label: 'MIN MOM', k: 'minMom', max: 100 },
+              { label: 'MIN QUAL', k: 'minQual', max: 100 },
+              { label: 'MIN SCORE', k: 'minScore', max: 100 },
+            ].map(({ label, k, max }) => (
+              <div key={k} className="flex-1 min-w-[110px]">
+                <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>
+                  {label}: <span style={{ color: T.blue, fontFamily: T.mono }}>{flt[k as keyof typeof flt]}</span>
+                </div>
+                <input
+                  type="range" min={0} max={max} value={flt[k as keyof typeof flt]}
+                  onChange={e => setFlt(f => ({ ...f, [k]: +e.target.value }))}
+                  style={{ width: '100%', accentColor: T.blue }}
+                />
+              </div>
+            ))}
           </div>
 
-          {[
-            { label: 'MIN ROE%', k: 'minRoe', max: 40 },
-            { label: 'MAX PE', k: 'maxPe', max: 100 },
-            { label: 'MIN MOM', k: 'minMom', max: 100 },
-            { label: 'MIN QUAL', k: 'minQual', max: 100 },
-            { label: 'MIN SCORE', k: 'minScore', max: 100 },
-          ].map(({ label, k, max }) => (
-            <div key={k} style={{ minWidth: 110 }}>
-              <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>
-                {label}: <span style={{ color: T.blue, fontFamily: T.mono }}>{flt[k as keyof typeof flt]}</span>
-              </div>
-              <input
-                type="range" min={0} max={max} value={flt[k as keyof typeof flt]}
-                onChange={e => setFlt(f => ({ ...f, [k]: +e.target.value }))}
-                style={{ width: '100%', accentColor: T.blue }}
-              />
-            </div>
-          ))}
-
-          <div style={{ marginLeft: 'auto' }}>
+          <div className="w-full md:w-auto">
             <input
               value={q} onChange={e => setQ(e.target.value)}
               placeholder="Search ticker..."
               style={{
                 background: T.el, border: `1px solid ${T.b}`, borderRadius: 6, padding: '6px 12px',
-                fontSize: 12, color: T.text, width: 170, outline: 'none',
+                fontSize: 12, color: T.text, outline: 'none',
               }}
+              className="w-full md:w-[170px]"
             />
           </div>
         </div>
       </div>
 
-      <div style={card({ overflow: 'auto' })}>
+      <div style={card({ overflow: 'auto' })} className="w-full overflow-x-auto">
         {isLoading ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: 10 }}>
             <RefreshCw className="w-6 h-6 text-brand animate-spin" />
             <span style={{ fontSize: 12, color: T.sub }}>Computing live factor scores...</span>
+          </div>
+        ) : isError ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: 10 }}>
+            <span style={{ fontSize: 12, color: T.red }}>
+              Screening failed — live factor computation can take a while on a cold cache. Please try again.
+            </span>
+            <button
+              onClick={() => refetch()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 12px', background: T.el, border: `1px solid ${T.b}`,
+                borderRadius: 6, fontSize: 12, color: T.sub, cursor: 'pointer'
+              }}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
+            <span style={{ fontSize: 12, color: T.sub }}>No stocks match the current filters.</span>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>

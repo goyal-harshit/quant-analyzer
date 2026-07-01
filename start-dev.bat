@@ -55,8 +55,9 @@ echo.
 echo [INFO] Port check complete. Starting services...
 echo.
 
-REM Start docker-compose in detached mode
-docker-compose up -d
+REM Start docker-compose in detached mode and rebuild local images so frontend
+REM static exports pick up recent code changes.
+docker-compose up -d --build
 
 if errorlevel 1 (
     color 0C

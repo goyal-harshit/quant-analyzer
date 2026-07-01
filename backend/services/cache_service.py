@@ -32,26 +32,42 @@ def _record_cache(hit: bool) -> None:
 
 
 class CacheService:
+    # After a failed connect, don't retry on every call — a down Redis would
+    # otherwise turn a batch of N cache gets into N connection timeouts
+    # (e.g. a 500-name screen stalling for minutes). Retry at most once per window.
+    _RECONNECT_COOLDOWN = 30.0
+
     def __init__(self, redis_url: str = None):
         import os
         self.redis_url = redis_url or os.getenv("REDIS_URL", "redis://localhost:6379/0")
         self._redis = None
         self._in_memory = {}
+        self._connect_retry_at = 0.0
 
     async def _connect(self):
         global _redis_instance
         if _redis_instance is not None:
             self._redis = _redis_instance
             return
+        # Back off from hammering an unreachable Redis on every get/set.
+        if time.monotonic() < self._connect_retry_at:
+            return
+        if not self.redis_url:
+            self._redis = None
+            self._connect_retry_at = time.monotonic() + self._RECONNECT_COOLDOWN
+            return
         try:
             import redis.asyncio as aioredis
-            self._redis = aioredis.from_url(self.redis_url, decode_responses=True)
+            self._redis = aioredis.from_url(
+                self.redis_url, decode_responses=True, socket_connect_timeout=2, socket_timeout=2
+            )
             await self._redis.ping()
             logger.info("Redis cache connected")
             _redis_instance = self._redis
         except Exception as e:
             logger.warning(f"Redis unavailable, using in-memory cache: {e}")
             self._redis = None
+            self._connect_retry_at = time.monotonic() + self._RECONNECT_COOLDOWN
 
     async def get(self, key: str) -> Optional[str]:
         value = await self._get_raw(key)

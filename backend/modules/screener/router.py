@@ -13,7 +13,9 @@ import pandas as pd
 
 from models.schemas import ScreenerFilter, ScreenerResponse, ScreenerResult
 from services.data_service import data_service, _gather_limited, NIFTY_50_TICKERS
+from services.universe import NIFTY_500_TICKERS
 from services.factor_engine import FactorEngine
+from services.factor_scoring import seed_snapshot
 from services.seed_data import get_seed_sectors, get_seed_fundamentals, get_seed_quote
 from services import portfolio_io
 
@@ -22,51 +24,75 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 engine = FactorEngine()
 
+# Universes that are too large to screen via live data-source fan-out on free
+# APIs. These use a fast, network-free snapshot (warm cache + deterministic seed).
+_BROAD_UNIVERSES = {"NIFTY200", "NIFTY500", "BSE500"}
+
+
+def _resolve_universe(filters: ScreenerFilter) -> tuple[list[str], bool]:
+    """Return (tickers, broad) for a screen request.
+
+    `broad=True` selects the fast seed/cache path (no 500-way live fan-out).
+    A custom ticker list always uses the live path; NIFTY50 stays live-warmed.
+    """
+    if filters.tickers and len(filters.tickers) > 0:
+        return filters.tickers, False
+    u = (filters.universe or "NIFTY50").upper()
+    if u in _BROAD_UNIVERSES:
+        return list(NIFTY_500_TICKERS), True
+    return list(NIFTY_50_TICKERS), False
+
 
 @router.post("", response_model=ScreenerResponse)
 async def screen_stocks(filters: ScreenerFilter):
     """Screen the universe using factor and fundamental filters.
-    All data fetched in ONE parallel batch for minimum latency.
+
+    NIFTY50 / custom lists fetch live data in one parallel batch. Broad universes
+    (NIFTY200/NIFTY500/BSE500) use a fast network-free snapshot — screening all
+    500 names live is not viable on free data sources (429 storms, minutes of
+    latency).
     """
-    # Live screening over a bounded liquid universe (NIFTY 50). Screening all
-    # 1,100+ seed tickers live is not viable on free data sources (429 storms,
-    # minutes of latency); these 50 are warmed on startup so the screen is fast.
-    universe = filters.tickers if filters.tickers and len(filters.tickers) > 0 else NIFTY_50_TICKERS
+    universe, broad = _resolve_universe(filters)
 
-    # Single parallel batch: fundamentals + history + quotes all at once
-    all_coros = []
-    for t in universe:
-        all_coros.append(data_service.get_fundamentals(t, refresh=filters.refresh))
-    for t in universe:
-        all_coros.append(data_service.get_price_history(t, period="1y", refresh=filters.refresh))
-    for t in universe:
-        all_coros.append(data_service.get_quote(t, refresh=filters.refresh))
+    if broad:
+        fundamentals_list, price_histories, quote_map = seed_snapshot(universe)
+    else:
+        # Single parallel batch: fundamentals + history + quotes all at once
+        all_coros = []
+        for t in universe:
+            all_coros.append(data_service.get_fundamentals(t, refresh=filters.refresh))
+        for t in universe:
+            all_coros.append(data_service.get_price_history(t, period="1y", refresh=filters.refresh))
+        for t in universe:
+            all_coros.append(data_service.get_quote(t, refresh=filters.refresh))
 
-    all_results = await _gather_limited(all_coros, limit=20)
-    n = len(universe)
-    fund_results = all_results[:n]
-    hist_results = all_results[n:2*n]
-    quote_results = all_results[2*n:]
+        all_results = await _gather_limited(all_coros, limit=20)
+        n = len(universe)
+        fund_results = all_results[:n]
+        hist_results = all_results[n:2*n]
+        quote_results = all_results[2*n:]
 
-    fundamentals_list = []
-    for ticker, fund in zip(universe, fund_results):
-        if fund:
-            fund = dict(fund) if isinstance(fund, dict) else fund
-            if isinstance(fund, dict):
-                fund["ticker"] = ticker
-                if not fund.get("sector"):
-                    fund["sector"] = data_service._SECTOR_MAP.get(ticker)
-                fundamentals_list.append(fund)
-                continue
-        sd = get_seed_fundamentals(ticker)
-        sd["ticker"] = ticker
-        sd["source"] = "seed"
-        fundamentals_list.append(sd)
+        fundamentals_list = []
+        for ticker, fund in zip(universe, fund_results):
+            if fund:
+                fund = dict(fund) if isinstance(fund, dict) else fund
+                if isinstance(fund, dict):
+                    fund["ticker"] = ticker
+                    if not fund.get("sector"):
+                        fund["sector"] = data_service._SECTOR_MAP.get(ticker)
+                    fundamentals_list.append(fund)
+                    continue
+            sd = get_seed_fundamentals(ticker)
+            sd["ticker"] = ticker
+            sd["source"] = "seed"
+            fundamentals_list.append(sd)
 
-    price_histories = {}
-    for ticker, df in zip(universe, hist_results):
-        if df is not None and not df.empty:
-            price_histories[ticker] = df["close"]
+        price_histories = {}
+        for ticker, df in zip(universe, hist_results):
+            if df is not None and not df.empty:
+                price_histories[ticker] = df["close"]
+
+        quote_map = {t: q for t, q in zip(universe, quote_results)}
 
     if not fundamentals_list:
         raise HTTPException(status_code=503, detail="Unable to fetch universe data")
@@ -107,8 +133,6 @@ async def screen_stocks(filters: ScreenerFilter):
     composite_scores = engine.compute_composite(
         momentum_scores, quality_scores, value_scores, growth_scores, low_vol_scores
     )
-
-    quote_map = dict(zip(universe, quote_results))
 
     results = []
     for ticker in fund_df.index:

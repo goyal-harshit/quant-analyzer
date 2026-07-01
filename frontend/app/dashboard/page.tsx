@@ -77,7 +77,7 @@ export default function Dashboard() {
   const [refreshSeed, setRefreshSeed] = useState(0)
 
   // Real hooks querying backend APIs
-  const { data: indices, isLoading: indicesLoading } = useMarketSummary(refreshSeed)
+  const { data: indices, isLoading: indicesLoading, isError: indicesError } = useMarketSummary(refreshSeed)
   const { data: movers, isLoading: moversLoading } = useTopGainersLosers(refreshSeed)
   const { data: sectorPerf, isLoading: sectorsLoading } = useSectorPerformance(refreshSeed)
   const { data: factorSignals, isLoading: factorsLoading } = useFactorSignals(refreshSeed)
@@ -151,9 +151,15 @@ export default function Dashboard() {
       }
     >
       {isDemo && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-warn/10 border border-warn/30 text-warn text-xs font-medium">
-          <span>⚠</span>
-          <span>Live backend not connected — showing demo data. Deploy the backend on Render to see real NSE/BSE feeds.</span>
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg border-2 border-danger bg-danger/15 text-danger">
+          <span className="shrink-0 rounded bg-danger px-2 py-1 text-[10px] font-extrabold uppercase tracking-widest text-white">
+            Demo Data
+          </span>
+          <span className="text-xs font-semibold leading-snug">
+            {indicesError
+              ? 'These numbers are NOT live — the dashboard API request failed in this browser session. Confirm http://localhost:8000/health is reachable, then hard refresh.'
+              : 'These numbers are NOT live — showing sample data until the market feed responds.'}
+          </span>
         </div>
       )}
 

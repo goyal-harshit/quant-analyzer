@@ -41,15 +41,18 @@ from celery.schedules import crontab
 # screener.in), and per-key cache TTLs. The only periodic job is a light LIVE
 # warm of the liquid universe to keep the dashboard/screener fast.
 celery_app.conf.beat_schedule = {
-    "warm-live-universe-every-30-min": {
+    # Warm the liquid universe (live NIFTY-50 fundamentals + factor signals) every
+    # 15 minutes — matches the "signals updated every 15 minutes" product promise.
+    # The reliability layer (circuit breakers + rate limiters) guards the sources.
+    "warm-live-universe-every-15-min": {
         "task": "services.tasks.warm_live_universe_task",
-        "schedule": crontab(minute="*/30"),
+        "schedule": crontab(minute="*/15"),
     },
     # Ingest-then-serve: refresh the market_* store from the guarded LIVE chain so
     # the API serves fresh quotes/fundamentals/history straight from the DB. Safe
     # to run periodically now that every source is behind a circuit breaker.
-    "refresh-market-store-every-30-min": {
+    "refresh-market-store-every-15-min": {
         "task": "services.tasks.refresh_market_store_task",
-        "schedule": crontab(minute="*/30"),
+        "schedule": crontab(minute="*/15"),
     },
 }

@@ -217,23 +217,88 @@ Be brief. Use numbers. No headers."""
     }
 
 
+async def _build_earnings_context(ticker: str, period: str) -> tuple[str, dict]:
+    """Assemble real earnings context from free sources: Screener.in quarterly
+    figures + fundamentals + recent Google-News headlines. No fabricated text."""
+    from modules.earnings.service import get_ticker_earnings
+    from modules.news.service import get_ticker_news
+
+    earnings, fundamentals, news = await asyncio.gather(
+        get_ticker_earnings(ticker),
+        data_service.get_fundamentals(ticker),
+        get_ticker_news(ticker, limit=8),
+        return_exceptions=True,
+    )
+    earnings = earnings if isinstance(earnings, dict) else {}
+    fundamentals = fundamentals if isinstance(fundamentals, dict) else {}
+    news = news if isinstance(news, dict) else {}
+
+    name = fundamentals.get("name") or earnings.get("name") or ticker
+    lines = [f"Company: {name} ({ticker}) — period: {period}"]
+
+    hist = earnings.get("history") or []
+    if hist:
+        q = hist[0]
+        lines.append(
+            "Latest reported quarter — "
+            f"revenue: ₹{q.get('revenue_cr')} cr, net profit: ₹{q.get('net_profit_cr')} cr, "
+            f"EPS: {q.get('eps')}, net margin: {q.get('net_margin_pct')}%"
+        )
+
+    fund_bits = []
+    for label, key in (("P/E", "pe_ratio"), ("ROE %", "roe"), ("Rev growth %", "revenue_growth"),
+                       ("EPS growth %", "eps_growth"), ("Debt/Equity", "debt_equity")):
+        v = fundamentals.get(key)
+        if v is not None:
+            fund_bits.append(f"{label}: {v}")
+    if fund_bits:
+        lines.append("Fundamentals — " + ", ".join(fund_bits))
+
+    articles = (news.get("articles") or [])[:6]
+    if articles:
+        lines.append(f"Recent news (sentiment: {news.get('sentiment', 'n/a')}):")
+        lines += [f"- {a.get('title')}" for a in articles if a.get("title")]
+
+    has_data = bool(hist or fund_bits or articles)
+    meta = {
+        "name": name,
+        "has_quarterly": bool(hist),
+        "article_count": len(articles),
+        "sources": [s for s, ok in (
+            ("screener.in", bool(hist or fund_bits)),
+            ("google-news", bool(articles)),
+        ) if ok],
+    }
+    return ("\n".join(lines) if has_data else ""), meta
+
+
 @router.post("/earnings-summary")
 @limiter.limit("20/minute")
 async def summarise_earnings(request: Request, payload: EarningsSummaryRequest):
     """
-    Summarise earnings release for a ticker.
-    In production: fetch raw filing text from NSE/BSE corporate
-    announcements or earnings call transcript providers.
+    Summarise a ticker's most recent earnings using real free-source data:
+    Screener.in quarterly figures + fundamentals + recent Google-News headlines.
     """
-    # Placeholder: in production, fetch actual filing text
     ticker = validate_ticker(payload.ticker)
-    placeholder_text = f"[Earnings filing text for {ticker}, period {payload.period} would be fetched from NSE/BSE corporate announcements API here]"
+    context, meta = await _build_earnings_context(ticker, payload.period)
 
-    summary = await ai_service.summarise_earnings(ticker, placeholder_text)
+    if not context:
+        return {
+            "ticker": ticker,
+            "period": payload.period,
+            "summary": f"No earnings data is currently available for {ticker} from the free sources (Screener.in / news). Try a large-cap NSE ticker, or check back after its next results.",
+            "sources": [],
+            "data_available": False,
+        }
+
+    summary = await ai_service.summarise_earnings(ticker, context)
     return {
         "ticker": ticker,
         "period": payload.period,
         "summary": summary,
+        "company": meta["name"],
+        "sources": meta["sources"],
+        "data_available": True,
     }
 
 
