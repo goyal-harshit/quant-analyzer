@@ -63,11 +63,16 @@ async def _warm(force: bool = False) -> None:
     global _warmed_at
     if not force and (time.time() - _warmed_at) < _WARM_TTL:
         return
+    # Acquire the client BEFORE taking `_lock`. `_get_client()` grabs `_lock`
+    # itself to create the client, and asyncio.Lock is NOT reentrant — doing it
+    # while already holding the lock deadlocks on a cold client (the first NSE
+    # call after every container start), which then gets cancelled by the caller's
+    # timeout and silently falls back to stale seed data. Create it up front.
+    client = await _get_client()
     async with _lock:
         # Re-check under the lock — another coroutine may have just warmed.
         if not force and (time.time() - _warmed_at) < _WARM_TTL:
             return
-        client = await _get_client()
         warmed = False
         for page in _WARM_PAGES:
             try:
