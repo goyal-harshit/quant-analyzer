@@ -33,8 +33,11 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          # Matches the production image (backend/Dockerfile: python:3.12-slim).
-          python-version: '3.12'
+          # 3.11 is what's actually verified locally (backend/.venv). The prod
+          # image runs 3.12 (Dockerfile); bumping this needs its own
+          # verification pass before switching, since alembic upgrade/downgrade
+          # failed under 3.12 here (untested combination of pinned deps).
+          python-version: '3.11'
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
