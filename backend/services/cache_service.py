@@ -69,6 +69,18 @@ class CacheService:
             self._redis = None
             self._connect_retry_at = time.monotonic() + self._RECONNECT_COOLDOWN
 
+    def _trip(self, e: Exception) -> None:
+        """A live Redis op just failed (e.g. the server died mid-session). Drop the
+        handle and start the cooldown so the rest of a batch falls straight to the
+        in-memory store instead of paying socket_timeout on every call — otherwise a
+        500-name screen becomes 500 × timeout. Clearing the shared global makes all
+        CacheService references back off together."""
+        global _redis_instance
+        logger.warning(f"Redis op failed, backing off to in-memory cache: {e}")
+        self._redis = None
+        _redis_instance = None
+        self._connect_retry_at = time.monotonic() + self._RECONNECT_COOLDOWN
+
     async def get(self, key: str) -> Optional[str]:
         value = await self._get_raw(key)
         _record_cache(value is not None)
@@ -80,8 +92,8 @@ class CacheService:
         if self._redis:
             try:
                 return await self._redis.get(key)
-            except Exception:
-                pass
+            except Exception as e:
+                self._trip(e)
         # In-memory fallback with TTL enforcement (value, expires_at).
         entry = self._in_memory.get(key)
         if entry is None:
@@ -99,8 +111,8 @@ class CacheService:
             try:
                 await self._redis.setex(key, ttl, value)
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                self._trip(e)
         # Bound the in-memory fallback so it can't grow unbounded.
         if len(self._in_memory) > 5000:
             self._in_memory.clear()
@@ -134,8 +146,8 @@ class CacheService:
                         await self._redis.delete(*keys)
                     if cursor == 0:
                         break
-            except Exception:
-                pass
+            except Exception as e:
+                self._trip(e)
         self._in_memory = {k: v for k, v in self._in_memory.items() if pattern not in k}
 
     async def health(self) -> bool:

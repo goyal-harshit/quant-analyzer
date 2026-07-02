@@ -1,12 +1,19 @@
 """IPO DB model (plan §5). Registered on the shared Base.metadata."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import String, Float, Integer, DateTime, Date
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.database import Base
+
+
+def _utcnow() -> datetime:
+    # Naive UTC — the DateTime column is TIMESTAMP WITHOUT TIME ZONE, and
+    # asyncpg rejects tz-aware values for naive columns. (.replace avoids the
+    # deprecated datetime.utcnow().)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class IPO(Base):
@@ -27,7 +34,7 @@ class IPO(Base):
     listing_price:   Mapped[Optional[float]] = mapped_column(Float)
     gmp:             Mapped[Optional[float]] = mapped_column(Float)
     status:          Mapped[str]             = mapped_column(String(20), default="UPCOMING")
-    updated_at:      Mapped[datetime]        = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at:      Mapped[datetime]        = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     def __repr__(self):
         return f"<IPO {self.company_name} {self.status}>"

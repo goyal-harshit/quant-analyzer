@@ -1,6 +1,6 @@
 """Pydantic schemas — request/response models"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -362,8 +362,7 @@ class UserOut(BaseModel):
     is_active: bool
     is_verified: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Token(BaseModel):
     access_token: str

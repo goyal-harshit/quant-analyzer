@@ -40,10 +40,14 @@ def _load_secret() -> str:
     if configured and configured != _DEFAULT_SECRET:
         return configured
     if _settings.environment.lower() in ("production", "prod"):
-        logger.error(
-            "JWT_SECRET_KEY is not set in production — using a machine-local generated "
-            "secret. Set JWT_SECRET_KEY via your secret store so tokens survive restarts "
-            "and are consistent across instances."
+        # Fail fast: a machine-local generated secret in prod is silently broken —
+        # it's lost on redeploy (Render's fs is ephemeral) and differs across
+        # instances, invalidating every session. render.yaml sets JWT_SECRET_KEY via
+        # generateValue, so reaching here means a real misconfiguration.
+        raise RuntimeError(
+            "JWT_SECRET_KEY is not set in production. Set it via your secret store "
+            "(render.yaml uses generateValue) so tokens survive restarts and are "
+            "consistent across instances."
         )
     import secrets
     import pathlib
@@ -57,7 +61,11 @@ def _load_secret() -> str:
         path.write_text(generated)
         logger.warning("JWT_SECRET_KEY not set — generated a persistent random secret at %s", path)
         return generated
-    except Exception:
+    except OSError as e:
+        logger.warning(
+            "Could not persist generated JWT secret to %s (%s) — using an ephemeral "
+            "secret; sessions will not survive a restart.", path, e,
+        )
         return secrets.token_urlsafe(48)
 
 

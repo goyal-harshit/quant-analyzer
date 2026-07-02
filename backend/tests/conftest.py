@@ -1,6 +1,26 @@
-import pytest
-import asyncio
-from typing import AsyncGenerator
+import os
+import pathlib
+import tempfile
+
+# Make `pytest` work with zero external services. CI sets DATABASE_URL to an
+# ephemeral SQLite file (see .github/workflows/ci.yml); mirror that default here so
+# a bare local `pytest` doesn't fall through to the Postgres default in
+# models.database and fail every DB-backed test with a connection error. File-based
+# (not :memory:) so every async connection shares one schema. This MUST run before
+# any `models.database` import — hence at conftest module top-level, above the
+# heavy imports below.
+if not os.environ.get("DATABASE_URL"):
+    _test_db = pathlib.Path(tempfile.gettempdir()) / "quantai_pytest.db"
+    try:
+        _test_db.unlink()  # start each session from a clean schema
+    except FileNotFoundError:
+        pass
+    os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_test_db.as_posix()}"
+
+import asyncio  # noqa: E402
+from typing import AsyncGenerator  # noqa: E402
+
+import pytest  # noqa: E402
 
 # NOTE: heavy imports (FastAPI app, SQLAlchemy engine) are deferred into the
 # fixtures that need them. This keeps pure-unit suites (factor engine, quant

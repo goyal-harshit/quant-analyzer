@@ -5,13 +5,20 @@ live from mfapi.in + Redis cache; these tables exist for optional persistence
 and to keep the schema aligned with PROJECT_PLAN.md.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import String, Float, Integer, DateTime, Date
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.database import Base
+
+
+def _utcnow() -> datetime:
+    # Naive UTC — the DateTime column is TIMESTAMP WITHOUT TIME ZONE, and
+    # asyncpg rejects tz-aware values for naive columns. (.replace avoids the
+    # deprecated datetime.utcnow().)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class MFScheme(Base):
@@ -22,7 +29,7 @@ class MFScheme(Base):
     fund_house:   Mapped[Optional[str]] = mapped_column(String(150))
     scheme_type:  Mapped[Optional[str]] = mapped_column(String(100))
     category:     Mapped[Optional[str]] = mapped_column(String(150))
-    updated_at:   Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at:   Mapped[datetime]      = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
     def __repr__(self):
         return f"<MFScheme {self.scheme_code} {self.scheme_name[:30]}>"

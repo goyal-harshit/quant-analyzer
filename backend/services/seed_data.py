@@ -915,7 +915,6 @@ def get_universe_overview():
     result = []
     for entry in ALL_STOCKS:
         q = get_seed_quote(entry[0])
-        s = _stock_dict(entry[0])
         result.append({
             "ticker": q["ticker"], "name": q["name"], "sector": q["sector"],
             "price": q["price"], "change": q["change"], "change_pct": q.get("change_pct", 0),

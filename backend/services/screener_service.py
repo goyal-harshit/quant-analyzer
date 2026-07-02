@@ -43,13 +43,6 @@ def _extract_table_data(soup: BeautifulSoup, section_id: str) -> dict:
     if not table:
         return result
 
-    # Get headers
-    thead = table.find("thead")
-    if thead:
-        headers = [th.get_text(strip=True) for th in thead.find_all("th")]
-    else:
-        headers = []
-
     # Get rows
     tbody = table.find("tbody")
     if tbody:
@@ -64,67 +57,95 @@ def _extract_table_data(soup: BeautifulSoup, section_id: str) -> dict:
     return result
 
 
+# A parse is only "real" if it yielded at least one hard fundamental — a 200 page
+# for an unknown/stub ticker parses to just {ticker, source} and must NOT be treated
+# as a hit (that's what silently poisoned the 30-min cache with empties before).
+_REAL_KEYS = ("pe_ratio", "roe", "roce", "market_cap", "book_value", "eps", "debt_equity")
+
+
+def _has_real_data(d: dict) -> bool:
+    return any(d.get(k) is not None for k in _REAL_KEYS)
+
+
 class ScreenerService:
     """Scrapes Screener.in for Indian stock fundamental data."""
 
     def __init__(self):
         self.base_url = "https://www.screener.in/company/{ticker}"
         self._cache: dict = {}
-        self._cache_ttl = 1800  # 30 min in-process cache (fundamentals change slowly)
+        self._cache_ttl = 1800  # 30 min in-process cache for a real hit (slow-changing)
+        self._neg_ttl = 300     # only 5 min for a miss, so a transient block recovers fast
+
+    async def _fetch_html(self, url: str, ticker: str) -> Optional[str]:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers=HEADERS)
+            if resp.status_code == 200:
+                return resp.text
+            if resp.status_code in SOURCE_DOWN_STATUS:
+                raise httpx.HTTPStatusError(
+                    f"Screener.in HTTP {resp.status_code}", request=resp.request, response=resp
+                )
+            # 404 etc. — this URL variant doesn't exist; let the caller try the next.
+            logger.warning(f"Screener.in returned {resp.status_code} for {ticker} ({url})")
+            return None
 
     async def get_fundamentals(self, ticker: str) -> dict:
         """
         Fetch fundamental data from Screener.in for an Indian stock.
         Returns dict with PE, ROE, ROCE, margins, debt ratios, etc.
+
+        Resilience: tries the richer /consolidated/ page first, then the standalone
+        page (many companies only have one of the two). Only a parse with real data
+        is cached for 30 min; misses get a short negative TTL so a transient block or
+        a newly-listed name isn't stuck returning {} for half an hour.
         """
         import time
         now = time.time()
 
-        # Check cache
+        # Check cache — a real hit lives 30 min, an empty/miss only 5 min.
         if ticker in self._cache:
             cached_time, cached_data = self._cache[ticker]
-            if now - cached_time < self._cache_ttl:
+            ttl = self._cache_ttl if _has_real_data(cached_data) else self._neg_ttl
+            if now - cached_time < ttl:
                 logger.info(f"Screener.in cache hit for {ticker}")
                 return cached_data
-
-        url = self.base_url.format(ticker=ticker)
 
         # screener.in blocks bursts, so every scrape goes through the shared
         # "screener" guard: a token bucket smooths requests to a steady rate and
         # a circuit breaker short-circuits once screener.in starts blocking us,
         # instead of stampeding it with retries (the old 429/403 "storm").
-        async def _fetch_html() -> Optional[str]:
-            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-                resp = await client.get(url, headers=HEADERS)
-                if resp.status_code == 200:
-                    return resp.text
-                if resp.status_code in SOURCE_DOWN_STATUS:
-                    raise httpx.HTTPStatusError(
-                        f"Screener.in HTTP {resp.status_code}", request=resp.request, response=resp
-                    )
-                logger.warning(f"Screener.in returned {resp.status_code} for {ticker}")
-                return None
+        # /consolidated/ first — richest page for most listed companies.
+        for path in (f"{ticker}/consolidated", ticker):
+            url = f"https://www.screener.in/company/{path}/"
+            try:
+                html = await guard_call("screener", lambda u=url: self._fetch_html(u, ticker))
+            except CircuitOpenError as e:
+                # Circuit is open — the second variant would trip it too. Stop and
+                # negative-cache so callers fall back to seed without re-hammering.
+                logger.warning("Screener.in circuit open, skipping %s: %s", ticker, e)
+                self._cache[ticker] = (now, {})
+                return {}
+            except Exception as e:
+                logger.error(f"Screener.in scrape failed for {ticker} ({url}): {e}")
+                continue
 
-        try:
-            html = await guard_call("screener", _fetch_html)
-        except CircuitOpenError as e:
-            logger.warning("Screener.in circuit open, skipping %s: %s", ticker, e)
-            return {}
-        except Exception as e:
-            logger.error(f"Screener.in scrape failed for {ticker}: {e}")
-            return {}
+            if not html:
+                continue
 
-        if not html:
-            return {}
+            try:
+                data = self._parse_screener_page(BeautifulSoup(html, "lxml"), ticker)
+            except Exception as e:
+                logger.error(f"Screener.in parse failed for {ticker} ({url}): {e}")
+                continue
 
-        try:
-            soup = BeautifulSoup(html, "lxml")
-            data = self._parse_screener_page(soup, ticker)
-            self._cache[ticker] = (now, data)
-            return data
-        except Exception as e:
-            logger.error(f"Screener.in parse failed for {ticker}: {e}")
-            return {}
+            if _has_real_data(data):
+                self._cache[ticker] = (now, data)
+                return data
+            # Parsed but empty (unknown ticker / stub page) — try the next variant.
+
+        # No variant yielded usable data — short negative cache, fall back to seed.
+        self._cache[ticker] = (now, {})
+        return {}
 
     def _parse_screener_page(self, soup: BeautifulSoup, ticker: str) -> dict:
         """Parse a Screener.in company page and extract all fundamentals."""

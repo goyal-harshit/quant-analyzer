@@ -197,7 +197,6 @@ Be brief. Use numbers. No headers."""
             price = quote.get("price") if quote else 0
             pe = (fundamentals or {}).get("pe_ratio") or 0
             roe = (fundamentals or {}).get("roe") or 0
-            sector = (fundamentals or {}).get("sector", "Diversified")
             analysis = (
                 f"**Quick Snapshot**\n"
                 f"{ticker} trades at ₹{price:,.0f} with P/E {pe:.1f}x and ROE {roe:.1f}%. "
