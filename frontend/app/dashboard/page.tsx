@@ -101,12 +101,23 @@ export default function Dashboard() {
     )
   }
 
-  // Fall back to demo data when backend is unavailable
-  const rawIndices = (Array.isArray(indices) && indices.length > 0) ? indices : DEMO_INDICES
-  const resolvedMovers = (movers?.gainers?.length) ? movers : DEMO_MOVERS
-  const resolvedSectorPerf = (sectorPerf && Object.keys(sectorPerf).length > 0) ? sectorPerf : DEMO_SECTOR_PERF
-  const resolvedFactorSignals = ((factorSignals as any)?.signals?.length) ? factorSignals : DEMO_FACTOR_SIGNALS
+  // Demo data is a genuine-offline fallback ONLY. Previously each `resolved*`
+  // fell back to demo whenever its query data was empty — which includes the
+  // whole time the query is still loading. Because the heavy sections
+  // (factor signals, sectors, movers) take ~13s on a cold cache, the dashboard
+  // rendered fabricated demo prices (e.g. RELIANCE ₹2847 vs the real ₹1303)
+  // as if live, with no indication, and the loading spinners never showed
+  // (the demo rows kept the "length" truthy, defeating the loaders).
+  //
+  // Now: show demo only when the whole backend is unreachable (indices failed
+  // too). Otherwise a still-loading section resolves to empty so its spinner
+  // shows, and a section that settles without data renders empty rather than
+  // fake numbers.
   const isDemo = !indices || (Array.isArray(indices) && indices.length === 0)
+  const rawIndices = (Array.isArray(indices) && indices.length > 0) ? indices : DEMO_INDICES
+  const resolvedMovers = (movers?.gainers?.length) ? movers : (isDemo ? DEMO_MOVERS : { gainers: [], losers: [] })
+  const resolvedSectorPerf = (sectorPerf && Object.keys(sectorPerf).length > 0) ? sectorPerf : (isDemo ? DEMO_SECTOR_PERF : {})
+  const resolvedFactorSignals = ((factorSignals as any)?.signals?.length) ? factorSignals : (isDemo ? DEMO_FACTOR_SIGNALS : { signals: [] })
 
   // Key market insight, derived from live indices + sector breadth.
   const nifty = rawIndices.find((i: any) => i.name === 'NIFTY 50') || rawIndices[0]
