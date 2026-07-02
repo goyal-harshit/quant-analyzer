@@ -69,8 +69,9 @@ $config | ConvertTo-Json -Depth 10 | Set-Content $portsFile
 Write-Host "[OK] Updated $portsFile" -ForegroundColor Green
 
 # Create docker-compose.override.yml
+# (Compose accepts JSON; the top-level "version" attribute is obsolete in
+# Compose v2 and triggers a warning, so it is intentionally omitted.)
 $override = @{
-    version = "3.8"
     services = $overrideServices
 }
 

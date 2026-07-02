@@ -1,26 +1,21 @@
 # QuantAI Development Scripts
 
-Quick-launch batch files for managing the development environment.
+Quick-launch batch files for managing the local development environment on Windows. See [QUICKSTART.md](QUICKSTART.md) for the short version.
 
-## Scripts Overview
+## Scripts overview
 
-### 🚀 `start-dev.bat`
-**Launches the entire QuantAI stack**
+### `start-dev.bat`
+**Launches the entire QuantAI stack.**
 
 What it does:
-- ✅ Verifies Docker & Docker Compose are installed
-- 🔍 Runs port availability check (updates `.ports.json`)
-- 🐳 Starts all services with `docker-compose up -d`
-- 📊 Displays service status and port mappings
+- Verifies Docker and Docker Compose are installed
+- Runs the port availability check (`check-ports.ps1`, updates `.ports.json`)
+- Starts all services with `docker-compose up -d --build`
+- Displays service status and opens http://localhost:3000
 
-**Usage:**
-```
-Double-click start-dev.bat
-or
-cmd /c start-dev.bat
-```
+**Usage:** double-click `start-dev.bat` (or `cmd /c start-dev.bat`).
 
-**Result:**
+**Result (default ports):**
 ```
 Frontend   : http://localhost:3000
 API        : http://localhost:8000/api/v1
@@ -31,35 +26,25 @@ Ollama LLM : localhost:11434
 
 ---
 
-### 🛑 `stop-dev.bat`
-**Gracefully shuts down all services**
+### `stop-dev.bat`
+**Shuts down all services.**
 
-What it does:
-- Stops all running containers
-- Preserves data (databases, volumes)
-- Cleans up networks
+- Runs `docker-compose down`: stops containers and removes networks
+- Data is preserved (the `postgres_data` and `ollama_data` volumes are kept)
 
-**Usage:**
-```
-Double-click stop-dev.bat
-```
+**Usage:** double-click `stop-dev.bat`.
 
 ---
 
-### 📊 `status-dev.bat`
-**Check running services and port configuration**
+### `status-dev.bat`
+**Check running services and port configuration.**
 
-What it does:
-- Shows all running containers and their status
-- Displays port mappings from `.ports.json`
-- Helpful for debugging
+- Shows all containers and their status (`docker-compose ps`)
+- Displays current port assignments from `.ports.json`
 
-**Usage:**
-```
-Double-click status-dev.bat
-```
+**Usage:** double-click `status-dev.bat`.
 
-**Output Example:**
+**Output example:**
 ```
 NAME              STATUS
 quantai_backend   Up 5 minutes
@@ -77,84 +62,52 @@ Port Configuration:
 
 ---
 
-### 📝 `logs-dev.bat`
-**View service logs with interactive selection**
+### `logs-dev.bat`
+**View service logs with interactive selection.**
 
-What it does:
-- Shows menu to select which service's logs to view
-- Streams logs in real-time (follow mode)
-- Press Ctrl+C to exit
+- Menu-driven: pick a service (1 backend, 2 frontend, 3 postgres, 4 redis, 5 ollama, 6 celery_worker, 7 celery_beat, 8 all services)
+- Streams logs in follow mode; press Ctrl+C to exit
 
-**Usage:**
-```
-Double-click logs-dev.bat
-Select service number when prompted
-```
-
-**Examples:**
-- View backend API errors: Select `1`
-- View frontend build logs: Select `2`
-- Stream all logs: Select `8`
+**Usage:** double-click `logs-dev.bat`, then select a service number.
 
 ---
 
-## Port Management
+## Port management
 
 All scripts use the automatic port checker:
 
-**File: `.ports.json`**
-- Persistent registry of service ports
-- Auto-updated when ports conflict
-- Committed to git for consistency
+**`.ports.json`** — registry of service ports. Auto-updated when ports conflict. **Local to your machine and gitignored** (it reflects whatever ports happen to be free on your system).
 
-**File: `check-ports.ps1`**
-- PowerShell script that detects port conflicts
-- Finds next available port if needed
-- Updates `docker-compose.override.yml`
-- Run manually: `pwsh ./check-ports.ps1`
+**`check-ports.ps1`** — PowerShell script that:
+- Detects port conflicts (via `netstat`)
+- Finds the next available port when the target is busy
+- Writes host-port mappings to `docker-compose.override.yml` (auto-generated, gitignored — do not edit by hand)
+
+Run manually: `pwsh -NoProfile -ExecutionPolicy Bypass -File "check-ports.ps1"`
+
+To change a port: edit the `target` value in `.ports.json`, run `check-ports.ps1`, then restart the stack.
 
 ---
 
-## Quick Start
+## Quick start
 
-1. **First time setup:**
-   ```
-   start-dev.bat
-   ```
-   Wait for services to initialize (~30 seconds)
-
-2. **Check services are running:**
-   ```
-   status-dev.bat
-   ```
-
-3. **View logs if needed:**
-   ```
-   logs-dev.bat
-   ```
-
-4. **When done for the day:**
-   ```
-   stop-dev.bat
-   ```
+1. **First time:** run `start-dev.bat` and wait ~30 seconds for services to initialize
+2. **Verify:** `status-dev.bat`
+3. **Debug:** `logs-dev.bat`
+4. **Done for the day:** `stop-dev.bat`
 
 ---
 
 ## Troubleshooting
 
 ### Port already in use
-```
-start-dev.bat
-```
-The script automatically detects conflicts and uses the next available port. Check `status-dev.bat` to see assigned ports.
+Run `start-dev.bat` again — it detects the conflict and uses the next available port. Check `status-dev.bat` to see the assignments.
 
 ### Services not starting
-```
-logs-dev.bat → Select backend (option 1)
-```
-View backend logs to see errors. Common issues:
-- Port conflict: Run `check-ports.ps1` again
-- Database not ready: Wait 30 seconds, check again
+Run `logs-dev.bat` → select backend (option 1). Common issues:
+- `backend/.env` missing — create it with `cp backend/.env.example backend/.env`
+- Database not ready yet — wait 30 seconds and check again
+- Port conflict — run `check-ports.ps1` again
 
 ### Docker not found
 - Install Docker Desktop: https://www.docker.com/products/docker-desktop
@@ -162,46 +115,25 @@ View backend logs to see errors. Common issues:
 
 ---
 
-## Manual Commands
+## Manual commands
 
-If you prefer command line:
+If you prefer the command line:
 
 ```powershell
-# Start services
-docker-compose up -d
+docker-compose up -d               # start services
+docker-compose down                # stop services
+docker-compose ps                  # status
+docker-compose logs -f <service>   # follow logs
 
-# Stop services
-docker-compose down
-
-# Check status
-docker-compose ps
-
-# View logs
-docker-compose logs -f [service-name]
-
-# Check specific service health
+# Health probes
 docker exec quantai_postgres pg_isready
 docker exec quantai_redis redis-cli ping
 ```
 
 ---
 
-## Memory & Configuration
-
-**Saved in project:**
-- `.ports.json` — Port registry (git-tracked)
-- `docker-compose.override.yml` — Port overrides (auto-generated)
-- `check-ports.ps1` — Port checker script
-
-**Saved in memory:**
-- `~/.claude/projects/.../memory/port-management.md`
-- Future sessions will auto-check ports before launching
-
----
-
 ## Tips
 
-- 💡 Keep `status-dev.bat` window open while developing to monitor services
-- 💡 Use `logs-dev.bat` to debug issues without leaving scripts
-- 💡 Ports are automatically saved, so you can restart anytime
-- 💡 If you want to change a port: Edit `.ports.json`, then run `check-ports.ps1`
+- Keep `status-dev.bat` handy while developing to monitor services
+- Use `logs-dev.bat` to debug issues without extra terminal juggling
+- Port assignments persist across sessions via `.ports.json`, so restarts are consistent

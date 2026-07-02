@@ -10,6 +10,12 @@ node_modules/
 .next/
 *.tsbuildinfo
 
+# Playwright E2E artifacts
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/
+
 # Docker
 .env
 .env.local
@@ -17,6 +23,12 @@ node_modules/
 # Secrets / runtime state (never commit)
 .jwt_secret
 celerybeat-schedule
+
+# Test databases & tool caches
+backend/*.db
+*.sqlite3
+.pytest_cache/
+.ruff_cache/
 
 # IDE
 .vscode/
@@ -34,6 +46,5 @@ Thumbs.db
 docker-compose.override.yml
 launch.json
 *.docx
-backend/pytest.ini
 frontend/out/
 .claude/
