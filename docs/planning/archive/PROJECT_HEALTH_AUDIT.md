@@ -110,9 +110,11 @@ All routes mounted in `backend/main.py`. Status legend: ✅ live-data implementa
 7. Decide Quant Lab: build it against the existing backend `quant_lab` module (fastest — backend logic already exists) or remove the "Coming Soon" teaser from the landing page until it ships.
 
 **P2 — Hardening**
-8. Add a startup health self-check the frontend can call to distinguish "backend asleep/cold" from "backend down" from "CORS blocked," and surface a more specific error than "Backend not reachable."
-9. Improve Screener.in fundamentals scrape resilience (currently returns empty dict often, falls back to 24h-old seed).
-10. Move JWT secret to a required env var in prod instead of the `.jwt_secret` file fallback (already correct in `render.yaml` via `generateValue: true` — just confirm it's not overridden).
+8. ~~Specific login error instead of "Backend not reachable."~~ **DONE (2026-07-01)**: `describeConnectivityError()` in [lib/api.ts](frontend/lib/api.ts) distinguishes cold-start (timeout) from offline vs CORS by probing the root `/health` endpoint; login page ([app/login/page.tsx](frontend/app/login/page.tsx)) now surfaces the specific message.
+9. ~~Improve Screener.in fundamentals scrape resilience.~~ **DONE (2026-07-01)**: [screener_service.py](backend/services/screener_service.py) now tries the richer `/consolidated/` page first then standalone (many names only have one), and only caches a parse with real metrics for 30 min — an empty/stub result gets a 5-min negative TTL instead of poisoning the cache for half an hour. Guarded by [test_screener_service.py](backend/tests/test_screener_service.py).
+10. ~~JWT secret must be a required env var in prod.~~ **CONFIRMED + HARDENED (2026-07-01)**: `render.yaml` already provides it via `generateValue: true` with `ENVIRONMENT=production`. [auth_service.py](backend/services/auth_service.py) `_load_secret()` now **fails fast** (raises) in prod if the secret is unset, instead of silently generating an ephemeral per-instance file secret that would invalidate sessions on redeploy.
+
+**Also fixed (found while enabling the 500-name screen):** `cache_service` only backed off on Redis *connect* failure, not on a Redis that died *mid-session* — so a broad screen paid the 2s socket timeout on every one of 500 factor-cache gets (measured **547s**). `_trip()` now arms the reconnect cooldown on any live-op failure, dropping the whole batch to the in-memory store → **8.8s**. Regression-guarded by [test_cache_service.py](backend/tests/test_cache_service.py).
 
 ---
 

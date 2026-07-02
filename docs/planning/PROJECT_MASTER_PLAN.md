@@ -188,7 +188,7 @@ QuantAI is a mature full-stack analyzer: FastAPI backend (20 domain modules), Ne
 | API playground | ✅ | `/docs` |
 | Unit tests | ✅ | 14 test files, **135 tests** passing (reliability, providers, quant metrics, market store, observability, auth cookies, CSRF, RBAC, password reset, migrations) |
 | Integration tests | 🟡 | Auth + store + RBAC tested; broaden to module endpoints. **P1** |
-| End-to-end tests | ❌ | **Playwright** (OSS) for critical flows: login → screener → portfolio. **P2** |
+| End-to-end tests | ✅ | **Playwright** — `frontend/e2e/critical-flows.spec.ts` (6 offline tests: landing, login form, guest nav, screener/Quant-Lab shells) + a backend-gated auth flow; runs in CI. |
 | Docker | ✅ | Compose, 7 services |
 | GitHub Actions CI/CD | ✅ | `ci.yml`: ruff + pytest + migration verify + next build |
 | Environment management | ✅ | `config.py` pydantic-settings `Settings` + `get_settings()`; all services read typed config. |
@@ -295,7 +295,7 @@ Ordered so each phase unblocks the next. Every tool below is OSS or free-tier.
 20. **Prometheus metrics + Grafana** (optional self-host); **Uptime Kuma**.
 21. **Plausible/Umami** product analytics (privacy-friendly, OSS).
 22. ✅ **Mermaid architecture + sequence diagrams** in `/docs`; user & admin guides. *(Fully documented system design, security, RAG, and data fallback sequences)*
-23. **Playwright E2E** for login → screener → portfolio.
+23. ✅ **Playwright E2E** — `frontend/playwright.config.ts` + `frontend/e2e/critical-flows.spec.ts` serve the static `out/` export and cover landing, login-form validation, guest navigation, screener shell + Nifty 500 toggle, and Quant Lab (6 tests, no backend needed). The full auth login → screener → portfolio flow is written but self-skips unless `E2E_BACKEND=1`. Wired into CI (frontend job).
 > Output: you see usage, uptime, and the system is documented + regression-guarded.
 
 ### Phase G — Advanced features (P2–P3, ongoing)
