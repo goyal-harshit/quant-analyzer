@@ -1,14 +1,11 @@
 import StockDetailClient from './StockDetailClient'
+import { NIFTY_500_TICKERS } from '@/lib/tickers'
 
+// Pre-render every stock in the universe for the static export (output:
+// 'export') — any ticker missing here 500s when opened from the dashboard,
+// search, or screener, since there's no server to generate it on demand.
 export function generateStaticParams() {
-  const tickers = [
-    'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-    'HINDUNILVR', 'SBIN', 'BHARTIARTL', 'ITC', 'KOTAKBANK',
-    'LT', 'AXISBANK', 'WIPRO', 'HCLTECH', 'ASIANPAINT',
-    'MARUTI', 'SUNPHARMA', 'TITAN', 'BAJFINANCE', 'NESTLEIND',
-    'ULTRACEMCO', 'POWERGRID', 'NTPC', 'ONGC', 'JSWSTEEL',
-  ]
-  return tickers.map((ticker) => ({ ticker }))
+  return NIFTY_500_TICKERS.map((ticker) => ({ ticker }))
 }
 
 export default function StockPage() {
