@@ -1,4 +1,4 @@
-// /frontend/app/stocks/[ticker]/page.tsx
+// /frontend/app/stocks/[ticker]/StockDetailClient.tsx
 'use client'
 
 import { useState } from 'react'
@@ -109,7 +109,8 @@ export default function StockDetail() {
               setRefreshSeed(prev => prev + 1)
             }}
             className="flex items-center justify-center p-2 bg-elevated border border-border/80 hover:bg-border/40 text-textSub hover:text-textPrimary rounded-lg transition-all"
-            title="Refresh Feed"
+            title="Refresh feed"
+            aria-label="Refresh feed"
           >
             <RefreshCw className={`w-4 h-4 ${(quoteLoading || insightLoading) ? 'animate-spin' : ''}`} />
           </button>

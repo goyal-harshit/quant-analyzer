@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/auth/AuthProvider'
+import { describeConnectivityError } from '@/lib/api'
 import { toast } from 'react-hot-toast'
 import { Sparkles, Mail, Lock, ArrowRight, Eye } from 'lucide-react'
 
@@ -26,12 +27,10 @@ export default function LoginPage() {
       await login(email, password)
       toast.success('Logged in successfully!')
     } catch (err: any) {
-      if (!err.response) {
-        toast.error('Backend not reachable. Use "Explore as Guest" to browse without an account.')
-      } else if (err.response?.status === 401) {
+      if (err.response?.status === 401) {
         toast.error('Incorrect email or password')
       } else {
-        toast.error(err.response?.data?.detail || 'Login failed')
+        toast.error(await describeConnectivityError(err))
       }
     } finally {
       setSubmitting(false)
@@ -115,7 +114,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="text-center text-xs text-textMuted">
-          <span>Don't have an account? </span>
+          <span>Don&rsquo;t have an account? </span>
           <Link href="/register" className="text-brand hover:underline font-medium">
             Create an account
           </Link>

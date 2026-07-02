@@ -3,6 +3,10 @@ import { persist } from 'zustand/middleware'
 
 export type Provider = 'ollama' | 'openai' | 'anthropic' | 'gemini' | 'groq'
 
+// Ollama runs on the user's own machine by design (self-hosted, free LLM).
+// Overridable for non-default ports / remote hosts.
+export const OLLAMA_BASE_URL = process.env.NEXT_PUBLIC_OLLAMA_URL || 'http://localhost:11434'
+
 export interface ModelOption {
   id: string
   label: string

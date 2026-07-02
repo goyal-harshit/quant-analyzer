@@ -102,7 +102,7 @@ export default function NotificationsPage() {
       ) : notifs.length === 0 ? (
         <div style={card({ padding: 50, textAlign: 'center', color: T.sub })}>
           <Bell style={{ width: 32, height: 32, color: T.muted, margin: '0 auto 12px' }} />
-          <div style={{ fontSize: 14 }}>You're all caught up — no notifications right now.</div>
+          <div style={{ fontSize: 14 }}>You&rsquo;re all caught up — no notifications right now.</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, Play, Shield, Activity, Zap } from 'lucide-react'
+import { RefreshCw, Play } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import toast from 'react-hot-toast'
 import { T } from '@/lib/stockData'
 import { backtestApi } from '@/lib/api'
 
@@ -77,17 +78,17 @@ export default function Backtester() {
         benchmark: 'NIFTY50'
       })
       setBacktestResult(res)
-    } catch (e) {
-      console.error(e)
-      alert('Failed to run backtest. Make sure the backend server is reachable.')
+    } catch {
+      toast.error('Backtest failed — the backend server is unreachable. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Run initial backtest on load
+  // Re-run automatically when the strategy changes; other parameters apply on "Run Backtest".
   useEffect(() => {
     runBacktest()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [strategy])
 
   const metrics = backtestResult?.metrics || {
@@ -234,6 +235,10 @@ export default function Backtester() {
           {isLoading && chartData.length === 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
               <RefreshCw className="w-8 h-8 text-brand animate-spin" />
+            </div>
+          ) : chartData.length === 0 ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 13, color: T.sub, textAlign: 'center', padding: '0 20px' }}>
+              No backtest results yet — the backend may be unreachable. Click &ldquo;Run Backtest&rdquo; to retry.
             </div>
           ) : (
             <LineChart data={chartData} margin={{ top: 4, right: 16, bottom: 0, left: 40 }}>

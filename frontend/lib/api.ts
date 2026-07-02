@@ -18,6 +18,40 @@ const client = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// The health check lives at the server root, outside the /api/v1 prefix.
+export const HEALTH_URL = API_BASE.replace(/\/api\/v1\/?$/, "") + "/health";
+
+/** Best-effort liveness probe of the backend (no credentials, short timeout). */
+export async function pingHealth(timeoutMs = 8000): Promise<boolean> {
+  try {
+    await axios.get(HEALTH_URL, { timeout: timeoutMs, withCredentials: false });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Turn an axios failure into a specific, actionable message instead of a flat
+ * "Backend not reachable". Distinguishes a free-tier cold start (timeout) from a
+ * server that's actually down vs. a reachable-but-misconfigured backend (CORS).
+ */
+export async function describeConnectivityError(err: any): Promise<string> {
+  // A timeout is almost always a free-tier cold start (Render sleeps after ~15 min).
+  if (err?.code === "ECONNABORTED" || /timeout/i.test(err?.message || "")) {
+    return "The backend is waking up (free-tier cold start) — this can take up to a minute. Please try again shortly.";
+  }
+  // No response object at all → network error or CORS. Probe /health to tell apart.
+  if (!err?.response) {
+    const alive = await pingHealth();
+    if (alive) {
+      return "The server is reachable, but the login request was blocked — likely a CORS or cookie configuration issue (check NEXT_PUBLIC_API_URL / CORS_ORIGINS).";
+    }
+    return 'Backend appears offline or asleep. Use "Explore as Guest" to browse without an account, or try again in a minute.';
+  }
+  return err?.response?.data?.detail || "Login failed. Please try again.";
+}
+
 // "authed" is a NON-sensitive marker (not the token) telling the client a session
 // likely exists, so it knows whether to attempt /me and silent refresh on 401.
 const AUTH_FLAG = "authed";

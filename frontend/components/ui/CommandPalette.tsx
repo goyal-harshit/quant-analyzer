@@ -79,8 +79,9 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
       try {
         const res = await stocksApi.search(query)
         setResults(res.results || [])
-      } catch (err) {
-        console.error(err)
+      } catch {
+        // Backend unreachable — show the "no results" state rather than crashing.
+        setResults([])
       } finally {
         setSearching(false)
       }
@@ -147,7 +148,7 @@ export default function CommandPalette({ isOpen, onClose }: CommandPaletteProps)
           )}
 
           {!searching && results.length === 0 && query.trim() && (
-            <div className="text-center py-6 text-sm text-textSub">No stocks found matching "{query}"</div>
+            <div className="text-center py-6 text-sm text-textSub">No stocks found matching &ldquo;{query}&rdquo;</div>
           )}
 
           {!searching && results.length === 0 && !query.trim() && (

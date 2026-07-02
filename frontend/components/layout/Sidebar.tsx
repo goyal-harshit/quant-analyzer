@@ -7,6 +7,7 @@ import { Home, Filter, Target, RefreshCw, Globe, MessageSquare, Zap, Cpu, LogOut
 import { useAuth } from '../auth/AuthProvider'
 import { useEffect, useState } from 'react'
 import ModelSelector from '../ai/ModelSelector'
+import { OLLAMA_BASE_URL } from '@/lib/model-store'
 
 const NAV = [
   { id: 'dashboard', icon: Home, label: 'Dashboard', href: '/dashboard' },
@@ -39,7 +40,7 @@ export default function Sidebar({ collapsed, onToggle, isMobile = false, mobileO
   useEffect(() => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 2000)
-    fetch('http://localhost:11434/api/tags', { signal: controller.signal })
+    fetch(`${OLLAMA_BASE_URL}/api/tags`, { signal: controller.signal })
       .then(() => setOllamaStatus('active'))
       .catch(() => setOllamaStatus('unavailable'))
       .finally(() => clearTimeout(timer))
@@ -80,6 +81,7 @@ export default function Sidebar({ collapsed, onToggle, isMobile = false, mobileO
         )}
         <button
           onClick={onToggle}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className="p-1 hover:bg-elevated rounded text-textSub hover:text-textPrimary transition-colors hidden md:block"
         >
           <Menu className="w-4 h-4" />

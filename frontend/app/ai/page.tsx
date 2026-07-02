@@ -69,7 +69,7 @@ function buildOfflineChatReply(q: string) {
 }
 
 export default function AIChat() {
-  const { provider, modelId, getApiKey, getActiveModel } = useModelStore()
+  const { provider, modelId, getActiveModel } = useModelStore()
   const activeModel = getActiveModel()
   const providerInfo = PROVIDERS[provider]
 
@@ -240,6 +240,7 @@ export default function AIChat() {
           value={inp}
           onChange={e => setInp(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+          aria-label="Ask the research assistant"
           placeholder="Ask about Indian stocks, sectors, macro factors, quant strategies…"
           style={{
             flex: 1, minWidth: 0, background: T.el, border: `1px solid ${T.bhi}`, borderRadius: 9,
@@ -249,6 +250,7 @@ export default function AIChat() {
         <button
           onClick={send}
           disabled={load || !inp.trim()}
+          aria-label="Send message"
           style={{
             background: T.blue, border: 'none', borderRadius: 9, padding: '11px 18px',
             cursor: load || !inp.trim() ? 'not-allowed' : 'pointer',

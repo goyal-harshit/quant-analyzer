@@ -79,24 +79,24 @@ export default function StockChart({ data }: StockChartProps) {
   const [subpane, setSubpane] = useState<'none' | 'rsi' | 'macd'>('none')
   const [fullscreen, setFullscreen] = useState(false)
 
-  const getFilteredData = () => {
-    if (!data || data.length === 0) return []
-    const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date))
-    if (selectedPeriod === 'MAX') return sorted
-    const latestDate = new Date(sorted[sorted.length - 1].date)
-    const cutoff = new Date(latestDate)
-    if (selectedPeriod === '1M') cutoff.setMonth(latestDate.getMonth() - 1)
-    else if (selectedPeriod === '3M') cutoff.setMonth(latestDate.getMonth() - 3)
-    else if (selectedPeriod === '6M') cutoff.setMonth(latestDate.getMonth() - 6)
-    else if (selectedPeriod === '1Y') cutoff.setFullYear(latestDate.getFullYear() - 1)
-    else if (selectedPeriod === '5Y') cutoff.setFullYear(latestDate.getFullYear() - 5)
-    const cutoffStr = cutoff.toISOString().split('T')[0]
-    return sorted.filter((d) => d.date >= cutoffStr)
-  }
-
   useEffect(() => {
     if (!chartContainerRef.current || !data || data.length === 0) return
     const container = chartContainerRef.current
+
+    const getFilteredData = () => {
+      const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date))
+      if (selectedPeriod === 'MAX') return sorted
+      const latestDate = new Date(sorted[sorted.length - 1].date)
+      const cutoff = new Date(latestDate)
+      if (selectedPeriod === '1M') cutoff.setMonth(latestDate.getMonth() - 1)
+      else if (selectedPeriod === '3M') cutoff.setMonth(latestDate.getMonth() - 3)
+      else if (selectedPeriod === '6M') cutoff.setMonth(latestDate.getMonth() - 6)
+      else if (selectedPeriod === '1Y') cutoff.setFullYear(latestDate.getFullYear() - 1)
+      else if (selectedPeriod === '5Y') cutoff.setFullYear(latestDate.getFullYear() - 5)
+      const cutoffStr = cutoff.toISOString().split('T')[0]
+      return sorted.filter((d) => d.date >= cutoffStr)
+    }
+
     const filtered = getFilteredData()
     if (filtered.length === 0) return
 

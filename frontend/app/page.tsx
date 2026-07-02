@@ -196,8 +196,9 @@ export default function LandingPage() {
       const overview = await dashboardApi.getUniverseOverview()
       setMarketSummary(summary)
       setUniverse(overview)
-    } catch (err) {
-      console.error("Error fetching landing page live data:", err)
+    } catch {
+      // Backend unreachable — keep rendering the bundled sample data (the page
+      // drops the "LIVE" badge when universe data is missing, so this is safe).
     } finally {
       setIsRefreshing(false)
     }

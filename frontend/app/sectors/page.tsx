@@ -23,7 +23,7 @@ export default function SectorsPage() {
   const [refreshSeed, setRefreshSeed] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['sectors', 'performance', refreshSeed],
     queryFn: () => sectorsApi.getPerformance(refreshSeed > 0),
     staleTime: 60000,
@@ -85,6 +85,21 @@ export default function SectorsPage() {
       {/* Heatmap grid */}
       <Card padding="md">
         <Card.Header title="Sector Heatmap" subtitle="Click a tile for constituents · color = today's move" icon={Layers} />
+        {sectors.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <span className="text-sm text-textSub">
+              {isError
+                ? 'Sector data is unavailable right now — the market feed could not be reached.'
+                : 'No sector data available yet.'}
+            </span>
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-elevated hover:bg-border border border-border rounded-lg text-xs font-semibold text-textSub hover:text-textPrimary transition-all"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Retry
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           {sectors.map((s) => {
             const up = s.change_pct >= 0

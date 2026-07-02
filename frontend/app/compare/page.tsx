@@ -73,7 +73,7 @@ export default function ComparePage() {
           {tickers.map((t) => (
             <span key={t} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand/10 border border-brand/20 rounded-lg text-sm font-mono font-semibold text-brand">
               {t}
-              <button onClick={() => removeTicker(t)} className="hover:text-danger"><X className="w-3.5 h-3.5" /></button>
+              <button onClick={() => removeTicker(t)} aria-label={`Remove ${t}`} className="hover:text-danger"><X className="w-3.5 h-3.5" /></button>
             </span>
           ))}
           {tickers.length < 5 && (

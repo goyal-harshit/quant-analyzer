@@ -55,6 +55,7 @@ export default function IndexDetailClient() {
             <ArrowLeft className="w-3.5 h-3.5" /> All Indices
           </button>
           <button onClick={() => setRefreshSeed((p) => p + 1)}
+            aria-label="Refresh index data"
             className="p-1.5 bg-elevated border border-border rounded-lg text-textSub hover:text-textPrimary">
             <RefreshCw className="w-3.5 h-3.5" />
           </button>

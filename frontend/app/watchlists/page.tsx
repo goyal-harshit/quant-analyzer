@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Star, Trash2, Plus, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react'
+import { Trash2, Plus, RefreshCw } from 'lucide-react'
 import { T, pct, scoreColor } from '@/lib/stockData'
 import {
   useWatchlists,
@@ -12,12 +11,11 @@ import {
   useUpdateWatchlistTickers,
   useDeleteWatchlist
 } from '@/lib/hooks'
-import { stocksApi } from '@/lib/api'
+import { toast } from 'react-hot-toast'
 
 const card = (x = {}) => ({ background: T.card, border: `1px solid ${T.b}`, borderRadius: 10, ...x })
 
 export default function WatchlistsPage() {
-  const router = useRouter()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [newWatchlistName, setNewWatchlistName] = useState('')
   const [tickerToAdd, setTickerToAdd] = useState('')
@@ -74,7 +72,7 @@ export default function WatchlistsPage() {
     // Add ticker and update
     const currentTickers = activeList.tickers || []
     if (currentTickers.includes(symbol)) {
-      alert('Ticker is already in this watchlist')
+      toast.error(`${symbol} is already in this watchlist`)
       return
     }
 
@@ -159,7 +157,8 @@ export default function WatchlistsPage() {
                 background: 'transparent', border: 'none', color: T.red, cursor: 'pointer',
                 padding: '8px', marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}
-              title="Delete Watchlist"
+              title="Delete watchlist"
+              aria-label="Delete watchlist"
             >
               <Trash2 className="w-5 h-5" />
             </button>
@@ -316,7 +315,8 @@ export default function WatchlistsPage() {
                               background: 'transparent', border: 'none', color: T.red, cursor: 'pointer',
                               padding: 4
                             }}
-                            title="Remove Stock"
+                            title="Remove stock"
+                            aria-label={`Remove ${ticker} from watchlist`}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

@@ -16,7 +16,7 @@ export default function IndicesPage() {
   const router = useRouter()
   const [refreshSeed, setRefreshSeed] = useState(0)
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['indices', 'all', refreshSeed],
     queryFn: () => indicesApi.all(refreshSeed > 0),
     staleTime: 30000,
@@ -46,6 +46,20 @@ export default function IndicesPage() {
         <div className="flex flex-col items-center justify-center min-h-[300px] gap-4">
           <RefreshCw className="w-8 h-8 text-brand animate-spin" />
           <span className="text-textSub text-sm">Loading live indices…</span>
+        </div>
+      ) : grouped.length === 0 ? (
+        <div className="flex flex-col items-center justify-center min-h-[300px] gap-3 text-center">
+          <span className="text-textSub text-sm">
+            {isError
+              ? 'Index data is unavailable right now — the market feed could not be reached.'
+              : 'No index data available yet.'}
+          </span>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-elevated hover:bg-border border border-border rounded-lg text-xs font-semibold text-textSub hover:text-textPrimary transition-all"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Retry
+          </button>
         </div>
       ) : (
         grouped.map(({ group, items }) => (

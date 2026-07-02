@@ -1,4 +1,4 @@
-// /frontend/app/page.tsx
+// /frontend/app/dashboard/page.tsx
 'use client'
 
 import { useState } from 'react'
@@ -10,6 +10,7 @@ import PageShell from '@/components/layout/PageShell'
 import Card from '@/components/ui/Card'
 import { scoreColor } from '@/lib/stockData'
 import { nameToSlug } from '@/lib/indices'
+import { HEALTH_URL } from '@/lib/api'
 
 const DEMO_INDICES = [
   { name: 'NIFTY 50', last: 24857.3, change_pct: 0.62 },
@@ -157,7 +158,7 @@ export default function Dashboard() {
           </span>
           <span className="text-xs font-semibold leading-snug">
             {indicesError
-              ? 'These numbers are NOT live — the dashboard API request failed in this browser session. Confirm http://localhost:8000/health is reachable, then hard refresh.'
+              ? `These numbers are NOT live — the dashboard API request failed in this browser session. Confirm ${HEALTH_URL} is reachable, then hard refresh.`
               : 'These numbers are NOT live — showing sample data until the market feed responds.'}
           </span>
         </div>

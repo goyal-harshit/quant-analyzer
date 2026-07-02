@@ -115,12 +115,11 @@ export default function SimulatorPage() {
 
   const state = stateQ.data
   const perf = perfQ.data
-  const equity = perf?.equity_curve ?? []
   const totalUp = (state?.total_pnl ?? 0) >= 0
 
   const chartData = useMemo(
-    () => equity.map((e) => ({ date: e.date, value: e.value })),
-    [equity]
+    () => (perf?.equity_curve ?? []).map((e) => ({ date: e.date, value: e.value })),
+    [perf]
   )
 
   // ── Empty state: no portfolio yet ──

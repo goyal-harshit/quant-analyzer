@@ -153,6 +153,16 @@ export default function QuantLabPage() {
       {/* ── Optimise + Monte-Carlo result cards ── */}
       {(opt || mc) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-18" style={{ marginBottom: 18 }}>
+          {opt?.error && (
+            <div style={card({ padding: 16, textAlign: 'center' })}>
+              <span style={{ fontSize: 12, color: T.red }}>Portfolio optimisation failed — please try again in a moment.</span>
+            </div>
+          )}
+          {mc?.error && (
+            <div style={card({ padding: 16, textAlign: 'center' })}>
+              <span style={{ fontSize: 12, color: T.red }}>Monte-Carlo simulation failed — please try again in a moment.</span>
+            </div>
+          )}
           {opt && !opt.error && (
             <div style={card({ padding: 16 })}>
               <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 10 }}>Optimised Portfolio · top {opt.holdings?.length} names</div>

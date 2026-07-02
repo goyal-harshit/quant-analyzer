@@ -405,6 +405,7 @@ export default function Portfolio() {
                       onClick={() => handleRemove(p.id)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.red, padding: 4 }}
                       title="Remove position"
+                      aria-label={`Remove ${p.ticker} position`}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -415,7 +416,7 @@ export default function Portfolio() {
           </table>
         ) : (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: T.muted, fontSize: 13 }}>
-            No positions. Click "Add Position" to start building your portfolio.
+            No positions. Click &ldquo;Add Position&rdquo; to start building your portfolio.
           </div>
         )}
         <div style={{ padding: '13px 18px', borderTop: `1px solid ${T.b}`, display: 'flex', gap: 32 }}>
@@ -479,7 +480,7 @@ export default function Portfolio() {
                 <div>
                   <div style={{ fontSize: 10, color: T.muted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Avg Cost (₹)</div>
                   <input
-                  type="number" min={0} step={0.01} value={addCost}
+                    type="number" min={0} step={0.01} value={addCost}
                     onChange={e => setAddCost(e.target.value)}
                     placeholder="1000"
                     style={{

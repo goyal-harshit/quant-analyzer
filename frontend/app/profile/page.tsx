@@ -15,7 +15,7 @@ export default function ProfilePage() {
       <div style={{ padding: '26px 30px', maxWidth: 560, fontFamily: T.sans }}>
         <div style={card({ padding: 40, textAlign: 'center' })}>
           <User style={{ width: 36, height: 36, color: T.muted, margin: '0 auto 14px' }} />
-          <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>You're not signed in</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>You&rsquo;re not signed in</div>
           <div style={{ fontSize: 13, color: T.sub, margin: '8px 0 18px' }}>
             Sign in to manage your portfolios, watchlists and alerts.
           </div>
