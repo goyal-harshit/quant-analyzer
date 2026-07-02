@@ -19,6 +19,11 @@
     "ast_hash": "70b4c5445c142734e26dfd4c4fbafdfd",
     "semantic_hash": "70b4c5445c142734e26dfd4c4fbafdfd"
   },
+  "QuantAI_App.jsx": {
+    "mtime": 1782744487.1953297,
+    "ast_hash": "13069d183b5f23c7845732ae0d58aa28",
+    "semantic_hash": "13069d183b5f23c7845732ae0d58aa28"
+  },
   "backend/alembic/env.py": {
     "mtime": 1782744487.204146,
     "ast_hash": "f5fb21b1dbd3c4b964196595bfdea1ca",
@@ -889,10 +894,35 @@
     "ast_hash": "82850de31680801f78226c3c6db1ebb7",
     "semantic_hash": "82850de31680801f78226c3c6db1ebb7"
   },
+  "AGENTS.md": {
+    "mtime": 1782744487.1805089,
+    "ast_hash": "4783f3c8650c8a6d059314f3c2ed8c10",
+    "semantic_hash": "4783f3c8650c8a6d059314f3c2ed8c10"
+  },
+  "CONTEXT.md": {
+    "mtime": 1782744487.1817718,
+    "ast_hash": "a2849200c8c94c956396c7cfe3e34c5a",
+    "semantic_hash": "a2849200c8c94c956396c7cfe3e34c5a"
+  },
   "DEV_SCRIPTS.md": {
     "mtime": 1782973792.3462677,
     "ast_hash": "6f414f95ace98092101a045a56eae0fa",
     "semantic_hash": ""
+  },
+  "PROJECT_HEALTH_AUDIT.md": {
+    "mtime": 1782932582.304015,
+    "ast_hash": "9939cc57e856558309f6d7376e3e20d6",
+    "semantic_hash": ""
+  },
+  "PROJECT_MASTER_PLAN.md": {
+    "mtime": 1782933414.914557,
+    "ast_hash": "f179cc1187503bf86e3588dbf1d4eae8",
+    "semantic_hash": ""
+  },
+  "PROJECT_PLAN.md": {
+    "mtime": 1782576555.494912,
+    "ast_hash": "88af0ea753951659f0f3dd2891ad8a80",
+    "semantic_hash": "88af0ea753951659f0f3dd2891ad8a80"
   },
   "QUICKSTART.md": {
     "mtime": 1782973772.0074368,
@@ -967,26 +997,6 @@
   "frontend/.eslintrc.json": {
     "mtime": 1782968841.192187,
     "ast_hash": "333094f992a888a9e64e7559fd53f703",
-    "semantic_hash": ""
-  },
-  "docs/planning/PROJECT_MASTER_PLAN.md": {
-    "mtime": 1782933414.914557,
-    "ast_hash": "f179cc1187503bf86e3588dbf1d4eae8",
-    "semantic_hash": ""
-  },
-  "docs/planning/archive/CONTEXT.md": {
-    "mtime": 1782744487.1817718,
-    "ast_hash": "a2849200c8c94c956396c7cfe3e34c5a",
-    "semantic_hash": ""
-  },
-  "docs/planning/archive/PROJECT_HEALTH_AUDIT.md": {
-    "mtime": 1782932582.304015,
-    "ast_hash": "9939cc57e856558309f6d7376e3e20d6",
-    "semantic_hash": ""
-  },
-  "docs/planning/archive/PROJECT_PLAN.md": {
-    "mtime": 1782576555.494912,
-    "ast_hash": "88af0ea753951659f0f3dd2891ad8a80",
     "semantic_hash": ""
   }
 }

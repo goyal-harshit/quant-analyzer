@@ -1,12 +1,12 @@
 # Graph Report - project  (2026-07-02)
 
 ## Corpus Check
-- 192 files · ~128,495 words
+- 194 files · ~132,079 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2103 nodes · 3653 edges · 146 communities (133 shown, 13 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 165 edges (avg confidence: 0.64)
+- 2143 nodes · 3707 edges · 156 communities (141 shown, 15 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 165 edges (avg confidence: 0.64)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
@@ -123,7 +123,9 @@
 - [[_COMMUNITY_Community 127|Community 127]]
 - [[_COMMUNITY_Community 128|Community 128]]
 - [[_COMMUNITY_Community 129|Community 129]]
+- [[_COMMUNITY_Community 130|Community 130]]
 - [[_COMMUNITY_Community 131|Community 131]]
+- [[_COMMUNITY_Community 132|Community 132]]
 - [[_COMMUNITY_Community 133|Community 133]]
 - [[_COMMUNITY_Community 134|Community 134]]
 - [[_COMMUNITY_Community 135|Community 135]]
@@ -131,12 +133,20 @@
 - [[_COMMUNITY_Community 137|Community 137]]
 - [[_COMMUNITY_Community 138|Community 138]]
 - [[_COMMUNITY_Community 139|Community 139]]
+- [[_COMMUNITY_Community 140|Community 140]]
 - [[_COMMUNITY_Community 141|Community 141]]
+- [[_COMMUNITY_Community 142|Community 142]]
 - [[_COMMUNITY_Community 143|Community 143]]
 - [[_COMMUNITY_Community 144|Community 144]]
 - [[_COMMUNITY_Community 145|Community 145]]
+- [[_COMMUNITY_Community 146|Community 146]]
+- [[_COMMUNITY_Community 147|Community 147]]
 - [[_COMMUNITY_Community 149|Community 149]]
+- [[_COMMUNITY_Community 150|Community 150]]
+- [[_COMMUNITY_Community 151|Community 151]]
+- [[_COMMUNITY_Community 152|Community 152]]
 - [[_COMMUNITY_Community 153|Community 153]]
+- [[_COMMUNITY_Community 154|Community 154]]
 - [[_COMMUNITY_Community 155|Community 155]]
 
 ## God Nodes (most connected - your core abstractions)
@@ -149,7 +159,7 @@
 7. `_gather_limited()` - 17 edges
 8. `FakeProvider` - 17 edges
 9. `FakeClock` - 17 edges
-10. `T` - 17 edges
+10. `QuantAI — Comprehensive Investment Analyzer` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `QuantAI Logo Icon (QA monogram)` --conceptually_related_to--> `QuantAI README`  [INFERRED]
@@ -171,39 +181,39 @@
 - **Data Reliability Fallback Pipeline** — architecture_fallback_chain, project_plan_fallback_chain_design, context_data_source_reality, lessons_data_prioritisation_lesson [INFERRED 0.85]
 - **Phased Build Execution Plan (A-F)** — project_master_plan_phase_a, project_master_plan_phase_b, project_master_plan_phase_c, project_master_plan_phase_d, project_master_plan_phase_e, project_master_plan_phase_f [EXTRACTED 0.75]
 
-## Communities (146 total, 13 thin omitted)
+## Communities (156 total, 15 thin omitted)
 
 ### Community 0 - "DB Models & Time Utils"
-Cohesion: 0.06
-Nodes (44): generate_thesis(), Generate a structured bull/bear investment thesis., validation.py — shared input validation helpers.  Centralises ticker validation, Normalise and validate a ticker symbol. Raises HTTP 400 if malformed.      Retur, validate_ticker(), Stocks module — quote, history, fundamentals, technicals, factor scores., get_batch_quotes(), get_factor_scores() (+36 more)
+Cohesion: 0.18
+Nodes (18): Normalise and validate a ticker symbol. Raises HTTP 400 if malformed.      Retur, validate_ticker(), _base_fundamentals(), _base_history(), get_factors(), get_fundamentals(), get_history(), get_technicals() (+10 more)
 
 ### Community 1 - "Architecture & Plan Docs"
 Cohesion: 0.17
 Nodes (15): Context & Token Management Instructions, High-Reliability Data Fallback Chain (Circuit Breakers), Data Source Reality (working vs blocked sources), Backend modules/ Domain Pattern, Revamp-Not-Rewrite Decision, QuantAI Session Context, PostgreSQL + TimescaleDB Service, Lesson: Live APIs Precede Seed Data (+7 more)
 
 ### Community 2 - "Pydantic Schemas"
-Cohesion: 0.11
-Nodes (38): ForgotPasswordRequest, ResetPasswordRequest, TokenRequest, run_backtest(), BaseModel, AlertCreate, AlertOut, BacktestDataPoint (+30 more)
+Cohesion: 0.08
+Nodes (43): list_strategy_templates(), Backtest Router — Factor strategy backtesting, Pre-built strategy templates available for backtesting., run_backtest(), BaseModel, AlertCreate, AlertOut, BacktestDataPoint (+35 more)
 
 ### Community 3 - "Typed Settings (config)"
-Cohesion: 0.07
-Nodes (29): Any, Settings, BaseSettings, CacheService, get_cache(), cache_service.py — Redis-backed caching with in-memory fallback. Cache-aside pat, Record a cache hit/miss for the /metrics cache-hit-rate gauge (best-effort)., A live Redis op just failed (e.g. the server died mid-session). Drop the (+21 more)
+Cohesion: 0.14
+Nodes (12): CacheService, get_cache(), cache_service.py — Redis-backed caching with in-memory fallback. Cache-aside pat, Record a cache hit/miss for the /metrics cache-hit-rate gauge (best-effort)., A live Redis op just failed (e.g. the server died mid-session). Drop the, _record_cache(), FakeDeadRedis, Tests for services/cache_service.py graceful Redis degradation.  Regression guar (+4 more)
 
 ### Community 4 - "Landing Page"
 Cohesion: 0.04
 Nodes (41): RAW, SCREENER_DATA, COLORS, METRICS, SUGGESTIONS, AI_TIMEOUT, BacktestMetrics, BestPick (+33 more)
 
 ### Community 5 - "Mutual Funds Module"
-Cohesion: 0.14
-Nodes (23): _all_schemes(), _cagr(), compare(), compute_returns(), compute_risk(), _daily_returns(), _get_json(), get_scheme() (+15 more)
+Cohesion: 0.07
+Nodes (39): Mutual Funds module — NAV, returns, risk, SIP, comparison (data: mfapi.in, free), get_returns(), get_risk(), get_scheme(), popular(), Mutual Funds router — /api/v1/mf, Search mutual fund schemes by name (mfapi.in, 14k+ schemes)., A small curated list of popular schemes for the empty state. (+31 more)
 
 ### Community 6 - "AI / RAG Endpoints"
 Cohesion: 0.14
 Nodes (13): global_exception_handler(), lifespan(), QuantAI Backend — FastAPI Application India-First Quantitative Investment Platfo, Background warm-up: pre-cache universe fundamentals + factor scores so the     s, Application startup/shutdown lifecycle., _warm_universe(), Exception, init_db() (+5 more)
 
 ### Community 7 - "Embedding Service"
-Cohesion: 0.05
-Nodes (40): Embedding, One embedded document. Unique per (kind, ref) so re-ingestion upserts in     pla, cosine_similarity(), EmbeddingService, Embedding service — text → vector via Ollama (Phase D, RAG).  Uses the already-r, Cosine similarity of two equal-length vectors. Returns 0.0 for degenerate     in, Embed a single string. None if disabled / empty / Ollama unreachable., Embed many strings sequentially (Ollama has no native batch endpoint).         O (+32 more)
+Cohesion: 0.07
+Nodes (33): cosine_similarity(), Embedding service — text → vector via Ollama (Phase D, RAG).  Uses the already-r, Cosine similarity of two equal-length vectors. Returns 0.0 for degenerate     in, build_context_block(), build_rag_user_prompt(), Externalized prompt templates (Phase D #15).  Keeping RAG prompts here (versione, Render retrieved passages as a numbered context block for the LLM prompt.      E, Compose the user-turn prompt: numbered context followed by the question. (+25 more)
 
 ### Community 8 - "Portfolio I/O (import/export/tax)"
 Cohesion: 0.08
@@ -222,8 +232,8 @@ Cohesion: 0.16
 Nodes (9): InsightAgent, Agent 5: Compute factor scores with cached fallback., Agent 6: Find peer companies in the same sector., Agent 7: Generate AI summary (runs in background, returns None if slow)., Master coordinator — fans out to all agents in parallel, merges results., Agent 1: Fetch current quote — fastest path (seed data)., Agent 2: Fetch fundamentals — from cache or seed., Agent 3: Fetch price history. (+1 more)
 
 ### Community 12 - "Legacy QuantAI_App Monolith"
-Cohesion: 0.06
-Nodes (30): 0. How to read this, 1. Current state in one paragraph, 2.11 Analytics, 2.12 Security, 2.13 Developer Experience, 2.14 Monitoring · 2.15 Deployment · 2.16 Storage, 2.17 Documentation · 2.18 Nice-to-have, 2.19 Free external APIs (relevance-ranked for a quant analyzer) (+22 more)
+Cohesion: 0.08
+Nodes (30): Backtester(), Badge(), BT_CHART, BT_COL, BT_STATS, BTS, buildOfflineChatReply(), buildOfflineReport() (+22 more)
 
 ### Community 13 - "Frontend API Hooks"
 Cohesion: 0.10
@@ -246,12 +256,12 @@ Cohesion: 0.11
 Nodes (25): BestPick, Multi-asset comparison module — compare 2-5 stocks side by side.  Reuses the liv, compare_stocks(), compare_stocks_get(), Comparison router — /api/v1/compare, Compare 2-5 stocks: fundamentals, returns/risk, factor radar, best-in-class pick, Convenience GET form: /compare/stocks?tickers=INFY,TCS,HCLTECH, AssetComparison (+17 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.12
-Nodes (26): Trading Simulator module — paper trading with live NSE/BSE prices.  Create virtu, create_portfolio(), delete_portfolio(), get_performance(), get_portfolio(), get_trades(), list_portfolios(), place_trade() (+18 more)
+Cohesion: 0.10
+Nodes (30): Enum, Trading Simulator module — paper trading with live NSE/BSE prices.  Create virtu, create_portfolio(), delete_portfolio(), get_performance(), get_portfolio(), get_trades(), list_portfolios() (+22 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.13
-Nodes (19): admin_ping(), logout(), _normalize_email(), auth.py — Authentication Router Handles registration, login, and fetching curren, Mint a fresh access token from the httpOnly refresh cookie, rotating the     ref, Clear the auth cookies. (Stateless JWTs: the access token remains valid until, Fetch current user details., Complete a password reset using the emailed token. (+11 more)
+Cohesion: 0.12
+Nodes (26): generate_thesis(), Generate a structured bull/bear investment thesis., admin_ping(), forgot_password(), ForgotPasswordRequest, _normalize_email(), auth.py — Authentication Router Handles registration, login, and fetching curren, Fetch current user details. (+18 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.11
@@ -278,12 +288,12 @@ Cohesion: 0.16
 Nodes (21): Network-free fundamentals + price + quote snapshot for broad screening.      Pre, seed_snapshot(), _daily_rng(), get_batch_quotes(), get_fundamentals(), get_market_indices(), get_price_history(), get_quote() (+13 more)
 
 ### Community 26 - "Community 26"
-Cohesion: 0.22
-Nodes (18): AsyncSession, SimTransaction, SimPortfolio, SimTransaction, _compute_holdings(), create_portfolio(), delete_portfolio(), get_performance() (+10 more)
+Cohesion: 0.16
+Nodes (21): rag_status(), How many documents are indexed (overall and for stocks)., AsyncSession, SimTransaction, SimPortfolio, SimTransaction, _utcnow(), _compute_holdings() (+13 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.21
-Nodes (17): FallbackChain, Tries providers in order; first non-empty result wins., FakeProvider, Tests for the data-provider fallback chain (services/providers.py).  Uses in-mem, test_all_empty_returns_empty_dict(), test_default_chain_falls_back_to_seed_when_live_empty(), test_empty_chain_rejected(), test_existing_source_tag_is_preserved() (+9 more)
+Cohesion: 0.19
+Nodes (15): NsePythonProvider, Live NSE quotes via the ``nsepython`` library (``nse_eq``)., FakeProvider, Tests for the data-provider fallback chain (services/providers.py).  Uses in-mem, test_all_empty_returns_empty_dict(), test_existing_source_tag_is_preserved(), test_falls_through_on_empty_result(), test_falls_through_on_provider_exception() (+7 more)
 
 ### Community 28 - "Community 28"
 Cohesion: 0.16
@@ -291,51 +301,51 @@ Nodes (9): JugaadProvider, _LazyLibProvider, _normalize_nse_quote(), Map the NSE
 
 ### Community 29 - "Community 29"
 Cohesion: 0.16
-Nodes (15): BaseException, Call ``func`` up to ``retries`` extra times with exponential backoff + jitter., retry_async(), FakeClock, Tests for the resilience primitives (services/reliability.py).  These use inject, Manually-advanced monotonic clock., test_breaker_call_short_circuits_when_open(), test_breaker_half_open_failure_reopens() (+7 more)
+Nodes (15): Async token-bucket rate limiter.      Refills at ``rate`` tokens/sec up to ``cap, TokenBucket, FakeClock, Tests for the resilience primitives (services/reliability.py).  These use inject, Manually-advanced monotonic clock., test_breaker_call_short_circuits_when_open(), test_breaker_half_open_failure_reopens(), test_breaker_half_open_then_close_on_success() (+7 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.14
 Nodes (9): AsyncClient, NseIndiaApiClient, Wrapper around NseIndiaApi (nse[server]) for live NSE data.      Uses server mod, Fetch quotes for multiple symbols with bounded concurrency (NSE throttles bursts, Fetch historical daily data for a symbol.          Args:             symbol: NSE, Check if NSE market is open.          Returns dict with 'marketState', 'marketSt, Hit NSE homepage to get fresh session cookies., Fetch live quote for a single NSE symbol.          Args:             symbol: NSE (+1 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.09
-Nodes (24): Mutual Funds module — NAV, returns, risk, SIP, comparison (data: mfapi.in, free), get_returns(), get_risk(), get_scheme(), popular(), Mutual Funds router — /api/v1/mf, Search mutual fund schemes by name (mfapi.in, 14k+ schemes)., A small curated list of popular schemes for the empty state. (+16 more)
+Cohesion: 0.06
+Nodes (30): 0. How to read this, 1. Current state in one paragraph, 2.11 Analytics, 2.12 Security, 2.13 Developer Experience, 2.14 Monitoring · 2.15 Deployment · 2.16 Storage, 2.17 Documentation · 2.18 Nice-to-have, 2.19 Free external APIs (relevance-ranked for a quant analyzer) (+22 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.08
-Nodes (25): Series, FactorEngine, Value = f(EV/EBITDA, P/B, P/E, FCF Yield, Dividend Yield)         Lower multiple, Growth = f(Revenue Growth, EPS Growth, Operating Profit Growth, Guidance Trend), Low Volatility anomaly (Ang et al. 2006, Baker et al. 2011).         Lower reali, Small-cap premium (Fama-French 1993).         Note: In Indian context, size fact, Short-term reversal (Jegadeesh 1990, Lehmann 1990).         Last-month losers te, Gross profitability & returns on capital (Novy-Marx 2013).         Distinct from (+17 more)
+Cohesion: 0.09
+Nodes (16): FactorEngine, Value = f(EV/EBITDA, P/B, P/E, FCF Yield, Dividend Yield)         Lower multiple, Growth = f(Revenue Growth, EPS Growth, Operating Profit Growth, Guidance Trend), Low Volatility anomaly (Ang et al. 2006, Baker et al. 2011).         Lower reali, Small-cap premium (Fama-French 1993).         Note: In Indian context, size fact, Short-term reversal (Jegadeesh 1990, Lehmann 1990).         Last-month losers te, Gross profitability & returns on capital (Novy-Marx 2013).         Distinct from, Balance-sheet strength: low leverage, high interest coverage & liquidity. (+8 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.08
-Nodes (28): PortfolioAnalytics, Cross-sectional z-score normalisation., Sortino ratio — only penalises downside volatility.         `periods` = return o, Calmar = CAGR / |max drawdown|. `periods` = observations per year., Historical Value at Risk., Conditional VaR (Expected Shortfall)., compute_quant_factors(), Compute quant factor scores for a single stock from price history + fundamentals (+20 more)
+Cohesion: 0.10
+Nodes (17): Sortino ratio — only penalises downside volatility.         `periods` = return o, Calmar = CAGR / |max drawdown|. `periods` = observations per year., _quarterly_returns(), Sharpe must scale by sqrt(periods); quarterly (4) != daily (252).     Use risk_f, test_calmar_periods_and_guard(), test_factor_engine_momentum_computation(), test_max_drawdown(), test_rsi_wilder_edges() (+9 more)
 
 ### Community 34 - "Community 34"
 Cohesion: 0.10
 Nodes (19): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+11 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.11
-Nodes (13): DataService, _gather_limited(), _get_redis(), NSE India public API — fetches metadata/industry details., Live annual macro series from the World Bank API (free, no key)., RBI policy repo rate. RBI publishes no free JSON API and the rate moves, Live India CPI inflation (annual %) from the World Bank., Live India real GDP growth (annual %) from the World Bank. (+5 more)
+Cohesion: 0.18
+Nodes (6): DataService, _gather_limited(), NSE India public API — fetches metadata/industry details., RBI policy repo rate. RBI publishes no free JSON API and the rate moves, Real 1d/1w/1m sector returns, averaged from member-stock price history., Compute a real, live composite/momentum score from price history (cached 1h).
 
 ### Community 36 - "Community 36"
 Cohesion: 0.20
 Nodes (10): Command-line equivalents, Daily workflow, Default ports, Get started, Launcher scripts, More documentation, Port management, Project structure (dev tooling) (+2 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.20
-Nodes (6): DataFrame, Fetch 5-year data dynamically if missing and ingest it in database., 12-minus-1 month momentum (Jegadeesh & Titman 1993).         Returns: cumulative, 6-minus-1 month momentum., 3-minus-1 month momentum., Composite momentum score = weighted combination of time-period signals.
+Cohesion: 0.16
+Nodes (7): DataFrame, Fetch 5-year data dynamically if missing and ingest it in database., Composite multi-factor score.         Each factor is first normalised to percent, 12-minus-1 month momentum (Jegadeesh & Titman 1993).         Returns: cumulative, 6-minus-1 month momentum., 3-minus-1 month momentum., Composite momentum score = weighted combination of time-period signals.
 
 ### Community 38 - "Community 38"
-Cohesion: 0.08
-Nodes (20): create_alert(), DeclarativeBase, Alert, BacktestRun, Base, FactorScore, Fundamentals, GeneratedReport (+12 more)
+Cohesion: 0.10
+Nodes (14): create_alert(), DeclarativeBase, Alert, BacktestRun, Base, GeneratedReport, Portfolio, Position (+6 more)
 
 ### Community 39 - "Community 39"
 Cohesion: 0.12
 Nodes (17): _constituent_tickers(), get_all_indices(), get_factor_signals(), get_index_detail(), get_market_summary(), get_sector_perf(), get_top_movers(), get_universe() (+9 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.20
-Nodes (10): Annualised Sharpe. India 10Y Gsec ≈ 6.5%.         `periods` = return observation, _quarterly_returns(), Sharpe must scale by sqrt(periods); quarterly (4) != daily (252).     Use risk_f, test_factor_engine_momentum_computation(), test_rsi_wilder_edges(), test_sharpe_guards_degenerate_input(), test_sharpe_scales_with_periods(), test_sharpe_degenerate_guards() (+2 more)
+Cohesion: 0.13
+Nodes (17): Winsorise extremes to reduce outlier impact., Annualised Sharpe. India 10Y Gsec ≈ 6.5%.         `periods` = return observation, compute_quant_factors(), Fast Data Service — Direct Yahoo Finance API (no yfinance library) =============, Compute quant factor scores for a single stock from price history + fundamentals, _linear_history(), Quant correctness golden-master suite.  Every expected value here is computed by, test_compute_quant_factors_empty_when_no_signal() (+9 more)
 
 ### Community 41 - "Community 41"
 Cohesion: 0.08
@@ -346,8 +356,8 @@ Cohesion: 0.14
 Nodes (17): build_chain(), build_default_chain(), build_live_chain(), _configured_order(), _fundamentals_ok(), _history_ok(), _quote_ok(), providers.py — unified market-data access with an ordered fallback chain.  The a (+9 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.12
-Nodes (15): 10. Key Python Dependencies, 11. Frontend Pages & Components, 13. Success Metrics (MVP), 14. Risk & Mitigation, 15. What This Is NOT, 1. Vision, 2. Current State (Revamp Baseline), 4. Architecture (+7 more)
+Cohesion: 0.11
+Nodes (16): Stocks module — quote, history, fundamentals, technicals, factor scores., get_batch_quotes(), get_factor_scores(), get_fundamentals(), get_price_history(), get_quote(), get_technicals(), Stocks router — /api/v1/stocks (thin HTTP layer; logic in service.py). (+8 more)
 
 ### Community 44 - "Community 44"
 Cohesion: 0.19
@@ -362,24 +372,24 @@ Cohesion: 0.07
 Nodes (28): BeautifulSoup, get_news(), get_ticker_sentiment(), News Router — real headlines + sentiment (Google News RSS, free)., Latest India market news with lexicon sentiment scores., Recent news + aggregate sentiment for a specific ticker., _fetch_rss(), get_market_news() (+20 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.18
-Nodes (11): 6.10 Macro Dashboard, 6.1 Dashboard (Home), 6.2 Stock Analysis, 6.3 Mutual Fund Analytics, 6.4 IPO / SME Tracker, 6.5 Portfolio Tracker, 6.6 Screener, 6.7 Watchlists (+3 more)
+Cohesion: 0.13
+Nodes (10): FactorScore, Fundamentals, PriceData, StockMaster, IngestionService, ingestion_service.py — Background data ingestion pipeline Seeds StockMaster, ing, Fetch fundamental data and update/insert latest., Compute factor scores from DB tables and store them. (+2 more)
 
 ### Community 48 - "Community 48"
 Cohesion: 0.21
 Nodes (11): mfApi, useMFPopular(), useMFReturns(), useMFRisk(), useMFScheme(), useMFSearch(), fI(), card() (+3 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.16
-Nodes (9): _labels_key(), Metrics, Minimal thread-safe metrics: counters + summaries (sum/count)., Tests for the observability layer (services/observability.py): JSON logging, req, test_counter_increments_and_renders(), test_label_values_are_escaped(), test_render_includes_extra_gauges(), test_reset_clears_metrics() (+1 more)
+Cohesion: 0.18
+Nodes (8): _labels_key(), Metrics, Minimal thread-safe metrics: counters + summaries (sum/count)., test_counter_increments_and_renders(), test_label_values_are_escaped(), test_render_includes_extra_gauges(), test_reset_clears_metrics(), test_summary_tracks_sum_and_count()
 
 ### Community 50 - "Community 50"
-Cohesion: 0.18
-Nodes (11): 8. API Endpoint Reference, AI, Alerts, Derivatives (Phase 2), IPO, Macro, Mutual Funds, News (+3 more)
+Cohesion: 0.15
+Nodes (11): Series, PortfolioAnalytics, Relative Strength Index., Average True Range — volatility measure for position sizing., Historical Value at Risk., Conditional VaR (Expected Shortfall)., test_alpha_zero_when_portfolio_equals_benchmark(), test_beta_defaults_to_one_when_too_short() (+3 more)
 
 ### Community 51 - "Community 51"
-Cohesion: 0.16
-Nodes (19): login(), OAuth2 password flow login.      Sets httpOnly access + refresh cookies (the sec, OAuth2PasswordRequestForm, create_access_token(), create_refresh_token(), create_reset_token(), create_verify_token(), _encode() (+11 more)
+Cohesion: 0.24
+Nodes (12): login(), OAuth2 password flow login.      Sets httpOnly access + refresh cookies (the sec, OAuth2PasswordRequestForm, create_access_token(), create_refresh_token(), create_reset_token(), create_verify_token(), _encode() (+4 more)
 
 ### Community 52 - "Community 52"
 Cohesion: 0.22
@@ -394,8 +404,8 @@ Cohesion: 0.17
 Nodes (14): DBProvider, Serves data from the ingest-then-serve store (`market_*` tables).      Placed fi, Tests for the ingest-then-serve store (services/market_store.py + DBProvider)., session_factory(), test_bars_upsert_replaces_and_reads_dataframe(), test_db_provider_miss_returns_none_not_raises(), test_db_provider_reads_from_store(), test_db_provider_swallows_db_errors() (+6 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.25
-Nodes (9): _build_guard(), get_guard(), guard_call(), reliability.py — resilience primitives for fragile free data sources.  The platf, Bundles a breaker + rate limiter + retry policy for one named source., Return the process-wide guard for ``name``, creating it on first use., Run ``func`` under the named source's guard (rate-limit + breaker + retry)., SourceGuard (+1 more)
+Cohesion: 0.23
+Nodes (10): _build_guard(), CircuitState, get_guard(), guard_call(), reliability.py — resilience primitives for fragile free data sources.  The platf, Bundles a breaker + rate limiter + retry policy for one named source., Return the process-wide guard for ``name``, creating it on first use., Run ``func`` under the named source's guard (rate-limit + breaker + retry). (+2 more)
 
 ### Community 56 - "Community 56"
 Cohesion: 0.16
@@ -406,36 +416,36 @@ Cohesion: 0.20
 Nodes (7): FastDataService, Fetch current quote from Yahoo Finance chart API (1d range)., Fetch fundamentals directly from Yahoo Finance quoteSummary API.         Free, d, Direct Yahoo Finance API calls, guarded by a per-source circuit breaker +     ra, Fetch fundamental data — Screener.in first (free, reliable, real), then, Fetch OHLCV history directly from Yahoo Finance chart API., Search ANY listed NSE/BSE stock via Yahoo's search API (covers the         whole
 
 ### Community 58 - "Community 58"
-Cohesion: 0.18
-Nodes (12): forgot_password(), Email a password-reset link. Always returns 200 (no user enumeration)., Email the current user a verification link., send_verification(), get_settings(), config.py — typed application settings (pydantic-settings).  Single source of tr, Cached settings singleton (read once per process)., EmailMessage (+4 more)
+Cohesion: 0.06
+Nodes (30): Any, Email the current user a verification link., send_verification(), get_settings(), config.py — typed application settings (pydantic-settings).  Single source of tr, Cached settings singleton (read once per process)., Settings, BaseSettings (+22 more)
 
 ### Community 59 - "Community 59"
 Cohesion: 0.12
 Nodes (36): add_message(), ask(), AskRequest, chat(), _conv_out(), ConversationCreate, create_conversation(), delete_conversation() (+28 more)
 
 ### Community 60 - "Community 60"
-Cohesion: 0.20
-Nodes (9): 1.1 Login → "Backend not reachable", 1.2 Main page showing wrong stock data, 1.3 Landing page advertises features that don't exist yet, 1. Root Causes (the 3 things you reported), 2. Function / Route Map (Backend — 103 routes, 19 modules), 3. Function / Page Map (Frontend — 21 routes), 4. Priority Fix Plan, 5. Verification Checklist (+1 more)
+Cohesion: 0.12
+Nodes (15): 10. Key Python Dependencies, 11. Frontend Pages & Components, 13. Success Metrics (MVP), 14. Risk & Mitigation, 15. What This Is NOT, 1. Vision, 2. Current State (Revamp Baseline), 4. Architecture (+7 more)
 
 ### Community 61 - "Community 61"
-Cohesion: 0.36
-Nodes (8): Request, get_current_user(), get_optional_user(), Prefer the Authorization header (back-compat); fall back to the httpOnly cookie., Resolve the authenticated user from the Bearer header OR the httpOnly cookie., Like get_current_user but returns None instead of 401 when no/invalid token., _token_from(), _user_for_token()
+Cohesion: 0.13
+Nodes (18): RuntimeError, generate_csrf_token(), get_current_user(), get_optional_user(), install_csrf_protection(), _load_secret(), auth_service.py — Authentication services Provides password hashing (bcrypt) and, Set the httpOnly access + refresh cookies plus the (readable) CSRF cookie.     h (+10 more)
 
 ### Community 62 - "Community 62"
-Cohesion: 0.20
-Nodes (4): _now_iso(), Call ``method`` on each provider until one returns a valid result., Live data via the direct Yahoo v8 API (already circuit-broken in fast_data)., YahooProvider
+Cohesion: 0.16
+Nodes (9): FallbackChain, _now_iso(), Tries providers in order; first non-empty result wins., Call ``method`` on each provider until one returns a valid result., Live data via the direct Yahoo v8 API (already circuit-broken in fast_data)., YahooProvider, test_default_chain_falls_back_to_seed_when_live_empty(), test_empty_chain_rejected() (+1 more)
 
 ### Community 63 - "Community 63"
 Cohesion: 0.22
 Nodes (5): SimPortfolioRef, simulatorApi, inr(), pct(), SimulatorPage()
 
 ### Community 64 - "Community 64"
-Cohesion: 0.20
-Nodes (10): 7. Phased Implementation Plan, Phase 1 — MVP: Stocks + Mutual Funds + IPO (Weeks 1-6), Phase 2 — F&O + Indices + ETFs (Weeks 7-10), Phase 3 — Commodities + Advanced (Weeks 11-14), Sprint 1 (Week 1-2): Foundation Revamp, Sprint 2 (Week 2-3): Stock Analysis Module, Sprint 3 (Week 3-4): Mutual Fund Module, Sprint 4 (Week 4-5): IPO Module + Portfolio + Watchlist (+2 more)
+Cohesion: 0.29
+Nodes (5): FastAPI, get_stock_insight(), Insight Router — Consolidated stock insight endpoint. Single API call replaces, Get full stock insight in one call — quote, fundamentals, history, technicals, f, validation.py — shared input validation helpers.  Centralises ticker validation
 
 ### Community 65 - "Community 65"
-Cohesion: 0.26
-Nodes (5): CircuitBreaker, Return True if a call may proceed now, transitioning state as needed.          W, Run ``func`` under the breaker. Raises CircuitOpenError if short-circuited., Per-source circuit breaker.      Opens after ``failure_threshold`` consecutive f, test_breaker_success_resets_failure_count()
+Cohesion: 0.29
+Nodes (4): CircuitBreaker, Return True if a call may proceed now, transitioning state as needed.          W, Run ``func`` under the breaker. Raises CircuitOpenError if short-circuited., Per-source circuit breaker.      Opens after ``failure_threshold`` consecutive f
 
 ### Community 66 - "Community 66"
 Cohesion: 0.31
@@ -446,8 +456,8 @@ Cohesion: 0.44
 Nodes (10): _login(), _make_portfolio(), Endpoint tests for Phase C portfolio import / export / tax-report.  These exerci, test_export_bad_format(), test_export_formats(), test_import_creates_and_merges_positions(), test_import_merges_with_existing_position(), test_import_rejects_bad_file() (+2 more)
 
 ### Community 68 - "Community 68"
-Cohesion: 0.29
-Nodes (7): Mark the user's email verified using the emailed token., verify_email(), decode_token(), Decode + validate a JWT. Enforces the token ``type`` so a refresh token can't, test_access_token_has_type_and_rejected_as_refresh(), test_legacy_token_without_type_treated_as_access(), test_refresh_token_rejected_as_access()
+Cohesion: 0.20
+Nodes (10): logout(), Mint a fresh access token from the httpOnly refresh cookie, rotating the     ref, Clear the auth cookies. (Stateless JWTs: the access token remains valid until, refresh(), Response, clear_auth_cookies(), decode_token(), Decode + validate a JWT. Enforces the token ``type`` so a refresh token can't (+2 more)
 
 ### Community 69 - "Community 69"
 Cohesion: 0.33
@@ -474,8 +484,8 @@ Cohesion: 0.39
 Nodes (6): useScreener(), useSectors(), Badge(), card(), sc(), Screener()
 
 ### Community 75 - "Community 75"
-Cohesion: 0.10
-Nodes (33): MarketBar, MarketFundamental, MarketQuote, market_store.py — DB tables for the ingest-then-serve market-data store.  These, Latest snapshot quote per ticker (one row per ticker, upserted)., Daily OHLCV bar — the time-series store (Postgres: a TimescaleDB hypertable)., Latest fundamentals snapshot per ticker (one row per ticker, upserted)., _age_seconds() (+25 more)
+Cohesion: 0.11
+Nodes (33): datetime, MarketBar, MarketFundamental, MarketQuote, market_store.py — DB tables for the ingest-then-serve market-data store.  These, Latest snapshot quote per ticker (one row per ticker, upserted)., Daily OHLCV bar — the time-series store (Postgres: a TimescaleDB hypertable)., Latest fundamentals snapshot per ticker (one row per ticker, upserted). (+25 more)
 
 ### Community 76 - "Community 76"
 Cohesion: 0.39
@@ -486,12 +496,12 @@ Cohesion: 0.29
 Nodes (5): # IMPORTANT: import every module that defines tables so they all register on, Run migrations in 'offline' mode.      This configures the context with just a U, Run migrations in 'online' mode.      In this scenario we need to create an Engi, run_migrations_offline(), run_migrations_online()
 
 ### Community 78 - "Community 78"
-Cohesion: 0.20
-Nodes (6): Clock, Async token-bucket rate limiter.      Refills at ``rate`` tokens/sec up to ``cap, TokenBucket, test_token_bucket_allows_burst_up_to_capacity(), test_token_bucket_rejects_bad_rate(), test_token_bucket_throttles_beyond_capacity()
+Cohesion: 0.33
+Nodes (3): Clock, CircuitOpenError, Raised when a call is short-circuited because the breaker is OPEN.
 
 ### Community 79 - "Community 79"
-Cohesion: 0.33
-Nodes (3): NsePythonProvider, Live NSE quotes via the ``nsepython`` library (``nse_eq``)., test_nsepython_provider_returns_none_on_lib_error()
+Cohesion: 0.40
+Nodes (3): IPO, IPO DB model (plan §5). Registered on the shared Base.metadata., _utcnow()
 
 ### Community 80 - "Community 80"
 Cohesion: 0.21
@@ -502,8 +512,8 @@ Cohesion: 0.14
 Nodes (13): Issue, Issue 2: Hook Refactoring & Variable Scope Mismatch (TypeScript compilation error), Issue 3: PowerShell Wildcard Characters in File Deletion (`[ticker]`), Issue 4: Redis reconnect-per-call stalled batch cache reads (production perf bug), Lessons Learned: Data Prioritisation, Resolution, Resolution, Resolution (+5 more)
 
 ### Community 82 - "Community 82"
-Cohesion: 0.18
-Nodes (11): LogRecord, _escape(), _fmt_labels(), get_request_id(), install_request_context(), new_request_id(), observability.py — structured logging, request IDs, metrics, error tracking.  Au, Add the request-id + timing + metrics middleware to a FastAPI app. (+3 more)
+Cohesion: 0.22
+Nodes (9): configure_logging(), _escape(), _fmt_labels(), install_request_context(), observability.py — structured logging, request IDs, metrics, error tracking.  Au, Add the request-id + timing + metrics middleware to a FastAPI app., Matched route pattern (bounded cardinality), else the raw path., Install a single root handler with the chosen formatter (idempotent). (+1 more)
 
 ### Community 85 - "Community 85"
 Cohesion: 0.50
@@ -522,32 +532,32 @@ Cohesion: 0.18
 Nodes (11): 1. System Topology Overview, 2.1 Double-Submit CSRF & httpOnly Authentication, 2.2 Role-Based Access Control (RBAC), 2. Security Architecture, 3. High-Reliability Data Fallback Chain, 4. Grounded AI Chat RAG Pipeline, 5.1 Time-Series Hypertables, 5.2 Key Entity Schemas (+3 more)
 
 ### Community 92 - "Community 92"
-Cohesion: 0.40
-Nodes (5): 3. Tech Stack (All Free), Backend, Data Sources (All Free, No API Key Unless Noted), Frontend, Infrastructure
+Cohesion: 0.18
+Nodes (11): 6.10 Macro Dashboard, 6.1 Dashboard (Home), 6.2 Stock Analysis, 6.3 Mutual Fund Analytics, 6.4 IPO / SME Tracker, 6.5 Portfolio Tracker, 6.6 Screener, 6.7 Watchlists (+3 more)
 
 ### Community 93 - "Community 93"
 Cohesion: 0.67
 Nodes (3): _db_state(), main(), migrate.py — safe Alembic bootstrap for startup/deploy.  Applies migrations idem
 
 ### Community 94 - "Community 94"
-Cohesion: 0.50
-Nodes (4): Enum, CircuitState, TradeSide, str
+Cohesion: 0.18
+Nodes (11): 8. API Endpoint Reference, AI, Alerts, Derivatives (Phase 2), IPO, Macro, Mutual Funds, News (+3 more)
 
 ### Community 95 - "Community 95"
-Cohesion: 0.40
-Nodes (5): RuntimeError, _load_secret(), Use a configured JWT_SECRET_KEY if real; otherwise generate and persist a     ra, CircuitOpenError, Raised when a call is short-circuited because the breaker is OPEN.
+Cohesion: 0.20
+Nodes (9): 1.1 Login → "Backend not reachable", 1.2 Main page showing wrong stock data, 1.3 Landing page advertises features that don't exist yet, 1. Root Causes (the 3 things you reported), 2. Function / Route Map (Backend — 103 routes, 19 modules), 3. Function / Page Map (Frontend — 21 routes), 4. Priority Fix Plan, 5. Verification Checklist (+1 more)
 
 ### Community 96 - "Community 96"
-Cohesion: 0.50
-Nodes (4): 12. Development Workflow, Adding a New Module, Git Workflow, Running Locally
+Cohesion: 0.20
+Nodes (10): 7. Phased Implementation Plan, Phase 1 — MVP: Stocks + Mutual Funds + IPO (Weeks 1-6), Phase 2 — F&O + Indices + ETFs (Weeks 7-10), Phase 3 — Commodities + Advanced (Weeks 11-14), Sprint 1 (Week 1-2): Foundation Revamp, Sprint 2 (Week 2-3): Stock Analysis Module, Sprint 3 (Week 3-4): Mutual Fund Module, Sprint 4 (Week 4-5): IPO Module + Portfolio + Watchlist (+2 more)
 
 ### Community 97 - "Community 97"
 Cohesion: 0.29
-Nodes (8): configure_logging(), JsonFormatter, Render log records as single-line JSON, including the request id and any     str, Install a single root handler with the chosen formatter (idempotent)., _record(), test_json_formatter_emits_parseable_json(), test_json_formatter_includes_exception(), test_json_formatter_includes_extra_and_request_id()
+Nodes (7): JsonFormatter, Render log records as single-line JSON, including the request id and any     str, Tests for the observability layer (services/observability.py): JSON logging, req, _record(), test_json_formatter_emits_parseable_json(), test_json_formatter_includes_exception(), test_json_formatter_includes_extra_and_request_id()
 
 ### Community 98 - "Community 98"
-Cohesion: 0.50
-Nodes (3): list_strategy_templates(), Backtest Router — Factor strategy backtesting, Pre-built strategy templates available for backtesting.
+Cohesion: 0.25
+Nodes (8): BaseException, Call ``func`` up to ``retries`` extra times with exponential backoff + jitter., retry_async(), T, test_retry_backoff_grows_exponentially(), test_retry_exhausts_and_raises(), test_retry_gives_up_immediately_on_open_circuit(), test_retry_succeeds_after_transient_failures()
 
 ### Community 99 - "Community 99"
 Cohesion: 0.25
@@ -561,17 +571,29 @@ Nodes (6): 1.1 Using the Factor Screener, 1.2 Portfolio & Broker Imports, 1. Use
 Cohesion: 0.40
 Nodes (5): 2.1 Local LLM & Embedding Setup, 2.2 Grounded AI Reindexing (RAG), 2.3 Monitoring Telemetry & Metrics, 2.4 Circuit Breaker Management & Health Checks, 2. Administrator & Developer Guide
 
+### Community 127 - "Community 127"
+Cohesion: 0.40
+Nodes (5): 3. Tech Stack (All Free), Backend, Data Sources (All Free, No API Key Unless Noted), Frontend, Infrastructure
+
+### Community 128 - "Community 128"
+Cohesion: 0.50
+Nodes (4): 12. Development Workflow, Adding a New Module, Git Workflow, Running Locally
+
 ### Community 131 - "Community 131"
-Cohesion: 0.18
-Nodes (9): FastAPI, get_stock_insight(), Insight Router — Consolidated stock insight endpoint. Single API call replaces, Get full stock insight in one call — quote, fundamentals, history, technicals, f, get_macro_dashboard(), get_macro_regime(), Macro Router — India macroeconomic indicators, Get full macro dashboard: repo rate, CPI, GDP, USD/INR, FII/DII flows.     Live (+1 more)
+Cohesion: 0.15
+Nodes (10): get_macro_dashboard(), get_macro_regime(), Macro Router — India macroeconomic indicators, Get full macro dashboard: repo rate, CPI, GDP, USD/INR, FII/DII flows.     Live, Classify current macro regime (simplified rule-based, replace with     HMM/ML re, _get_redis(), Live USD/INR spot history from Yahoo Finance (INR=X)., Live FII/DII provisional cash-market flows from NSE (free, current). (+2 more)
+
+### Community 132 - "Community 132"
+Cohesion: 0.25
+Nodes (5): get_calendar(), Earnings service — real quarterly figures sourced from screener.in (via the shar, Recently-reported results across the liquid universe (proxy for an     earnings, data_service.py — QuantAI unified data access layer.  Free/open-source fallback, _yfinance_retry()
 
 ### Community 133 - "Community 133"
-Cohesion: 0.18
-Nodes (8): get_earnings_calendar(), get_earnings_history(), Earnings Router — real quarterly results (screener.in)., Recently-reported quarterly results across the liquid universe., Latest reported quarterly figures for a ticker., get_calendar(), Earnings service — real quarterly figures sourced from screener.in (via the shar, Recently-reported results across the liquid universe (proxy for an     earnings
+Cohesion: 0.29
+Nodes (5): get_earnings_calendar(), get_earnings_history(), Earnings Router — real quarterly results (screener.in)., Recently-reported quarterly results across the liquid universe., Latest reported quarterly figures for a ticker.
 
 ### Community 134 - "Community 134"
-Cohesion: 0.10
-Nodes (15): datetime, IPO, IPO DB model (plan §5). Registered on the shared Base.metadata., _utcnow(), Timezone-aware UTC now. Replaces the deprecated datetime.utcnow., _utcnow(), MFNav, MFScheme (+7 more)
+Cohesion: 0.29
+Nodes (4): MFNav, MFScheme, Mutual Fund DB models (plan §5). Registered on the shared Base.metadata so init, _utcnow()
 
 ### Community 135 - "Community 135"
 Cohesion: 0.09
@@ -582,20 +604,28 @@ Cohesion: 0.29
 Nodes (5): install_rate_limiting(), _NoopLimiter, rate_limit.py — shared API rate limiter (slowapi).  Protects against resource ab, Stand-in so @limiter.limit(...) decorators are harmless no-ops., Wire the limiter into a FastAPI app (no-op if slowapi is unavailable).
 
 ### Community 137 - "Community 137"
-Cohesion: 0.17
-Nodes (11): health(), metrics_endpoint(), Prometheus metrics: HTTP request counts/latency, cache hit-rate, and     per-sou, breaker_gauges(), Render Prometheus text. ``extra_gauges`` maps name -> {labels_tuple: value}, Circuit-breaker state as a Prometheus gauge (1 = in that state)., render_metrics(), breaker_states() (+3 more)
+Cohesion: 0.33
+Nodes (6): health(), breaker_gauges(), Circuit-breaker state as a Prometheus gauge (1 = in that state)., breaker_states(), Snapshot of every known source's breaker — for the /health observability hook., test_breaker_gauges_reflect_state()
 
 ### Community 138 - "Community 138"
-Cohesion: 0.15
-Nodes (14): create_watchlist(), delete_watchlist(), get_watchlist(), get_watchlist_performance(), list_watchlists(), Watchlists Router — User watchlist management, Get watchlist performance vs benchmark, equal weighted index of tickers., Bound the list size so a request can't store thousands of tickers. (+6 more)
+Cohesion: 0.18
+Nodes (12): create_watchlist(), delete_watchlist(), get_watchlist(), get_watchlist_performance(), Watchlists Router — User watchlist management, Get watchlist performance vs benchmark, equal weighted index of tickers., Bound the list size so a request can't store thousands of tickers., Create a new watchlist. (+4 more)
 
 ### Community 139 - "Community 139"
-Cohesion: 0.22
-Nodes (8): Factor Engine — Quantitative Factor Computation Computes Momentum, Quality, Valu, backtest_strategy(), get_rule_templates(), Strategy Builder Router — No-code strategy composer, Get pre-built rule templates for the Strategy Builder UI., Backtest a custom strategy built from rules.     Rules are translated into facto, StrategyRequest, StrategyRule
+Cohesion: 0.29
+Nodes (7): backtest_strategy(), get_rule_templates(), Strategy Builder Router — No-code strategy composer, Get pre-built rule templates for the Strategy Builder UI., Backtest a custom strategy built from rules.     Rules are translated into facto, StrategyRequest, StrategyRule
+
+### Community 140 - "Community 140"
+Cohesion: 0.33
+Nodes (5): metrics_endpoint(), Prometheus metrics: HTTP request counts/latency, cache hit-rate, and     per-sou, Render Prometheus text. ``extra_gauges`` maps name -> {labels_tuple: value}, render_metrics(), test_render_metrics_smoke()
 
 ### Community 141 - "Community 141"
 Cohesion: 0.33
 Nodes (6): 1. Prerequisites, 2. Clone & configure, 3. Create the database, 4. Start the backend, 5. Start the frontend, Quick start — without Docker
+
+### Community 142 - "Community 142"
+Cohesion: 0.33
+Nodes (3): Live annual macro series from the World Bank API (free, no key)., Live India CPI inflation (annual %) from the World Bank., Live India real GDP growth (annual %) from the World Bank.
 
 ### Community 143 - "Community 143"
 Cohesion: 0.40
@@ -609,29 +639,41 @@ Nodes (5): CI Backend Job (ruff + pytest + migration verify), CI Quality-Gate Pi
 Cohesion: 0.40
 Nodes (5): `logs-dev.bat`, Scripts overview, `start-dev.bat`, `status-dev.bat`, `stop-dev.bat`
 
+### Community 146 - "Community 146"
+Cohesion: 0.40
+Nodes (4): LogRecord, get_request_id(), new_request_id(), test_request_id_contextvar()
+
+### Community 147 - "Community 147"
+Cohesion: 0.40
+Nodes (5): get_quote(), Ingest-then-serve fast path: a fresh quote straight from the market store,     o, Warm the store on-demand after a live fetch (complements the scheduled job)., _store_quote_read(), _store_quote_write()
+
 ### Community 149 - "Community 149"
 Cohesion: 0.50
 Nodes (3): extends, rules, @next/next/no-page-custom-font
 
+### Community 150 - "Community 150"
+Cohesion: 0.50
+Nodes (4): Embedding, One embedded document. Unique per (kind, ref) so re-ingestion upserts in     pla, Insert or update the (kind, ref) document in place., upsert_embedding()
+
 ## Knowledge Gaps
-- **299 isolated node(s):** `extends`, `@next/next/no-page-custom-font`, `OFFLINE_STOCKS`, `QUICK`, `RagSource` (+294 more)
+- **312 isolated node(s):** `T`, `RAW`, `STOCKS`, `SP`, `POS` (+307 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `T` connect `AI Chat Frontend` to `Community 65`, `Community 69`, `Community 73`, `Layout & Auth Provider`, `Community 74`, `Community 44`, `Frontend API Hooks`, `Community 48`, `Community 55`, `Community 29`?**
-  _High betweenness centrality (0.216) - this node is a cross-community bridge._
-- **Why does `retry_async()` connect `Community 29` to `AI Chat Frontend`, `Community 25`, `Community 55`?**
-  _High betweenness centrality (0.129) - this node is a cross-community bridge._
-- **Why does `guard_call()` connect `Community 55` to `Community 46`, `Community 57`, `Community 28`, `AI Chat Frontend`?**
-  _High betweenness centrality (0.085) - this node is a cross-community bridge._
+- **Why does `FactorEngine` connect `Community 32` to `Community 33`, `Community 37`, `Community 40`, `Alerts & Backtest Models`, `Community 139`, `Community 15`, `Community 50`, `Community 151`, `Community 152`, `Community 154`?**
+  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Why does `CircuitBreaker` connect `Community 65` to `Community 29`, `Community 78`, `Community 55`?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Are the 5 inferred relationships involving `FactorEngine` (e.g. with `InsightAgent` and `_precompute_single_factor()`) actually correct?**
   _`FactorEngine` has 5 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Run migrations in 'offline' mode.      This configures the context with just a U`, `Run migrations in 'online' mode.      In this scenario we need to create an Engi`, `# IMPORTANT: import every module that defines tables so they all register on` to the rest of the system?**
-  _699 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `DB Models & Time Utils` be split into smaller, more focused modules?**
-  _Cohesion score 0.05697278911564626 - nodes in this community are weakly interconnected._
+- **What connects `T`, `RAW`, `STOCKS` to the rest of the system?**
+  _712 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Pydantic Schemas` be split into smaller, more focused modules?**
-  _Cohesion score 0.10931174089068826 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08019323671497584 - nodes in this community are weakly interconnected._
+- **Should `Typed Settings (config)` be split into smaller, more focused modules?**
+  _Cohesion score 0.14153846153846153 - nodes in this community are weakly interconnected._
+- **Should `Landing Page` be split into smaller, more focused modules?**
+  _Cohesion score 0.041928721174004195 - nodes in this community are weakly interconnected._
