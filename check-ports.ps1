@@ -16,15 +16,42 @@ Write-Host "[INFO] Checking port availability..." -ForegroundColor Cyan
 # Read current port config
 $config = Get-Content $portsFile | ConvertFrom-Json
 
-# Check each service port
+# Check each service port. Extract the port from the *local address* column
+# (2nd whitespace-separated field), not a blind "last digit group on the
+# line" match — that previously grabbed the trailing PID column instead of
+# the port, so busy ports were silently reported as available.
 $netstat = netstat -ano -p tcp | Select-Object -Skip 4
 $usedPorts = @()
 
 foreach ($line in $netstat) {
-    if ($line -match 'LISTENING.*(\d+)$') {
-        $port = [int]($line -split '\s+' | Where-Object {$_ -match '^\d+$'} | Select-Object -Last 1)
-        $usedPorts += $port
+    if ($line -match 'LISTENING') {
+        $tokens = $line.Trim() -split '\s+'
+        $localAddress = $tokens[1]
+        if ($localAddress -match ':(\d+)$') {
+            $usedPorts += [int]$matches[1]
+        }
     }
+}
+$usedPorts = $usedPorts | Sort-Object -Unique
+
+# A port already published by this project's own running containers isn't a
+# conflict — `docker-compose up` will just reconnect to it. Without this,
+# re-running the launcher against an already-running stack ratchets every
+# port upward on each run instead of reusing the live one.
+$ownPorts = @()
+try {
+    $ownContainerPorts = docker ps --filter "name=quantai_" --format "{{.Ports}}" 2>$null
+    foreach ($line in $ownContainerPorts) {
+        foreach ($m in [regex]::Matches($line, '(?:0\.0\.0\.0|\[::\]):(\d+)->')) {
+            $ownPorts += [int]$m.Groups[1].Value
+        }
+    }
+} catch {
+    # Docker not available/running — fall back to treating nothing as "ours".
+}
+if ($ownPorts.Count -gt 0) {
+    Write-Host "Already owned by this project's running containers: $(($ownPorts | Sort-Object -Unique) -join ', ')" -ForegroundColor DarkYellow
+    $usedPorts = $usedPorts | Where-Object { $ownPorts -notcontains $_ }
 }
 
 Write-Host "Used ports: $($usedPorts -join ', ')" -ForegroundColor Yellow
@@ -63,10 +90,18 @@ foreach ($service in $config.services.PSObject.Properties) {
     }
 }
 
-# Update .ports.json
+# Update .ports.json. Written files are only reported [OK] if the write
+# actually succeeds — Set-Content errors (e.g. file locked by another
+# process) previously printed a non-terminating error but the script kept
+# going and claimed success anyway.
 $config.lastUpdated = (Get-Date -AsUTC -Format o)
-$config | ConvertTo-Json -Depth 10 | Set-Content $portsFile
-Write-Host "[OK] Updated $portsFile" -ForegroundColor Green
+try {
+    $config | ConvertTo-Json -Depth 10 | Set-Content $portsFile -ErrorAction Stop
+    Write-Host "[OK] Updated $portsFile" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] Failed to write $portsFile : $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
 
 # Create docker-compose.override.yml
 # (Compose accepts JSON; the top-level "version" attribute is obsolete in
@@ -75,8 +110,13 @@ $override = @{
     services = $overrideServices
 }
 
-$override | ConvertTo-Json -Depth 10 | Set-Content $overrideFile
-Write-Host "[OK] Created $overrideFile" -ForegroundColor Green
+try {
+    $override | ConvertTo-Json -Depth 10 | Set-Content $overrideFile -ErrorAction Stop
+    Write-Host "[OK] Created $overrideFile" -ForegroundColor Green
+} catch {
+    Write-Host "[ERROR] Failed to write $overrideFile : $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
 
 # Summary
 Write-Host "`n[INFO] Port Summary:" -ForegroundColor Cyan

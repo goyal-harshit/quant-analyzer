@@ -77,15 +77,25 @@ echo.
 
 docker-compose ps
 
+REM Read the actual assigned ports from .ports.json (check-ports.ps1 bumps
+REM them when a target port is genuinely taken by something else), so the
+REM banner and the auto-opened browser tab always point at the real URLs
+REM instead of hardcoded defaults that can silently go stale.
+for /f "delims=" %%A in ('pwsh -NoProfile -ExecutionPolicy Bypass -Command "(Get-Content .ports.json | ConvertFrom-Json).services.frontend.current"') do set FRONTEND_PORT=%%A
+for /f "delims=" %%A in ('pwsh -NoProfile -ExecutionPolicy Bypass -Command "(Get-Content .ports.json | ConvertFrom-Json).services.backend.current"') do set BACKEND_PORT=%%A
+for /f "delims=" %%A in ('pwsh -NoProfile -ExecutionPolicy Bypass -Command "(Get-Content .ports.json | ConvertFrom-Json).services.postgres.current"') do set POSTGRES_PORT=%%A
+for /f "delims=" %%A in ('pwsh -NoProfile -ExecutionPolicy Bypass -Command "(Get-Content .ports.json | ConvertFrom-Json).services.redis.current"') do set REDIS_PORT=%%A
+for /f "delims=" %%A in ('pwsh -NoProfile -ExecutionPolicy Bypass -Command "(Get-Content .ports.json | ConvertFrom-Json).services.ollama.current"') do set OLLAMA_PORT=%%A
+
 echo.
 echo ============================================================
 echo                  Services Running [OK]
 echo ============================================================
-echo  Frontend   : http://localhost:3000
-echo  API        : http://localhost:8000/api/v1
-echo  Database   : localhost:5432
-echo  Redis      : localhost:6379
-echo  Ollama LLM : localhost:11434
+echo  Frontend   : http://localhost:%FRONTEND_PORT%
+echo  API        : http://localhost:%BACKEND_PORT%/api/v1
+echo  Database   : localhost:%POSTGRES_PORT%
+echo  Redis      : localhost:%REDIS_PORT%
+echo  Ollama LLM : localhost:%OLLAMA_PORT%
 echo ============================================================
 echo.
 
@@ -93,15 +103,15 @@ echo.
 echo [INFO] Waiting for services to fully initialize...
 timeout /t 5 /nobreak
 
-echo [INFO] Opening http://localhost:3000 in your browser...
+echo [INFO] Opening http://localhost:%FRONTEND_PORT% in your browser...
 echo.
 
 REM Try to open browser with PowerShell (more reliable)
-pwsh -NoProfile -ExecutionPolicy Bypass -Command "Start-Process 'http://localhost:3000'"
+pwsh -NoProfile -ExecutionPolicy Bypass -Command "Start-Process 'http://localhost:%FRONTEND_PORT%'"
 
 if errorlevel 1 (
     REM Fallback to cmd start command
-    start http://localhost:3000
+    start http://localhost:%FRONTEND_PORT%
 )
 
 echo.
